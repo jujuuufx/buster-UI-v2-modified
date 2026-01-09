@@ -1,6 +1,6 @@
 -- Shadow UI Library
 -- Sleek and Modular UI for Roblox Executors
--- Version 1.0.0
+-- Version 1.1.0 (Fixed layout, button styles, and improvements)
 
 local Shadow = {}
 Shadow.__index = Shadow
@@ -56,14 +56,14 @@ function Shadow:CreateWindow(options)
     self.Theme = Themes[options.Theme or "DarkSleek"]
     self.Tabs = {}
     self.Modules = Modules
-    
+
     -- ScreenGui
     self.ScreenGui = CreateInstance("ScreenGui", {
         Parent = game.CoreGui,
         Name = options.Title or "ShadowUI",
         IgnoreGuiInset = true
     })
-    
+
     -- Main Frame
     self.MainFrame = CreateInstance("Frame", {
         Parent = self.ScreenGui,
@@ -75,7 +75,7 @@ function Shadow:CreateWindow(options)
     })
     CreateInstance("UICorner", { Parent = self.MainFrame, CornerRadius = UDim.new(0, 8) })
     CreateInstance("UIStroke", { Parent = self.MainFrame, Color = self.Theme.Border, Transparency = 0.5 })
-    
+
     -- Title Bar
     self.TitleBar = CreateInstance("Frame", {
         Parent = self.MainFrame,
@@ -84,7 +84,7 @@ function Shadow:CreateWindow(options)
         BorderSizePixel = 0
     })
     CreateInstance("UICorner", { Parent = self.TitleBar, CornerRadius = UDim.new(0, 8) })
-    
+
     local TitleLabel = CreateInstance("TextLabel", {
         Parent = self.TitleBar,
         Size = UDim2.new(1, -40, 1, 0),
@@ -95,7 +95,7 @@ function Shadow:CreateWindow(options)
         Font = Enum.Font.GothamBold,
         TextSize = 14
     })
-    
+
     -- Brand Icon
     if options.BrandIcon then
         CreateInstance("TextLabel", {
@@ -108,7 +108,7 @@ function Shadow:CreateWindow(options)
             TextSize = 20
         })
     end
-    
+
     -- Close Button
     local CloseButton = CreateInstance("TextButton", {
         Parent = self.TitleBar,
@@ -123,7 +123,7 @@ function Shadow:CreateWindow(options)
     CloseButton.MouseButton1Click:Connect(function()
         self.ScreenGui:Destroy()
     end)
-    
+
     -- Tab Container
     self.TabButtons = CreateInstance("Frame", {
         Parent = self.MainFrame,
@@ -133,14 +133,14 @@ function Shadow:CreateWindow(options)
         BorderSizePixel = 0
     })
     CreateInstance("UIListLayout", { Parent = self.TabButtons, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5) })
-    
+
     self.TabContent = CreateInstance("Frame", {
         Parent = self.MainFrame,
         Size = UDim2.new(1, 0, 1, -80),
         Position = UDim2.new(0, 0, 0, 80),
         BackgroundTransparency = 1
     })
-    
+
     -- Footer
     self.Footer = CreateInstance("TextLabel", {
         Parent = self.MainFrame,
@@ -152,7 +152,7 @@ function Shadow:CreateWindow(options)
         Font = Enum.Font.Gotham,
         TextSize = 10
     })
-    
+
     -- Draggable
     local dragging, dragInput, dragStart, startPos
     local function update(input)
@@ -181,7 +181,7 @@ function Shadow:CreateWindow(options)
             update(input)
         end
     end)
-    
+
     -- Toggle Key
     if options.ToggleBind then
         UserInputService.InputBegan:Connect(function(input)
@@ -190,7 +190,7 @@ function Shadow:CreateWindow(options)
             end
         end)
     end
-    
+
     return self
 end
 
@@ -199,7 +199,7 @@ function Shadow:CreateTab(options)
     local tab = {}
     tab.Name = options.Name
     tab.Icon = options.Icon
-    
+
     -- Tab Button
     tab.Button = CreateInstance("TextButton", {
         Parent = self.TabButtons,
@@ -211,7 +211,6 @@ function Shadow:CreateTab(options)
         TextSize = 12
     })
     CreateInstance("UICorner", { Parent = tab.Button, CornerRadius = UDim.new(0, 4) })
-    
     if options.Icon then
         CreateInstance("ImageLabel", {
             Parent = tab.Button,
@@ -222,7 +221,7 @@ function Shadow:CreateTab(options)
         })
         tab.Button.TextXAlignment = Enum.TextXAlignment.Right
     end
-    
+
     -- Tab Frame
     tab.Frame = CreateInstance("ScrollingFrame", {
         Parent = self.TabContent,
@@ -231,10 +230,35 @@ function Shadow:CreateTab(options)
         Visible = false,
         ScrollBarThickness = 4,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y
+        AutomaticCanvasSize = Enum.AutomaticSize.None  -- Manual control
     })
-    CreateInstance("UIListLayout", { Parent = tab.Frame, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder })
-    
+
+    -- Columns for left/right sections
+    tab.LeftColumn = CreateInstance("Frame", {
+        Parent = tab.Frame,
+        Size = UDim2.new(0.5, -5, 0, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y
+    })
+    CreateInstance("UIListLayout", { Parent = tab.LeftColumn, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder })
+
+    tab.RightColumn = CreateInstance("Frame", {
+        Parent = tab.Frame,
+        Size = UDim2.new(0.5, -5, 0, 0),
+        Position = UDim2.new(0.5, 5, 0, 0),
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y
+    })
+    CreateInstance("UIListLayout", { Parent = tab.RightColumn, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder })
+
+    -- Update CanvasSize dynamically
+    RunService:BindToRenderStep("UpdateCanvas_" .. tab.Name, Enum.RenderPriority.Camera.Value - 1, function()
+        local leftHeight = tab.LeftColumn.AbsoluteSize.Y
+        local rightHeight = tab.RightColumn.AbsoluteSize.Y
+        tab.Frame.CanvasSize = UDim2.new(0, 0, 0, math.max(leftHeight, rightHeight) + 10)  -- Extra padding
+    end)
+
     -- Tab Switching
     tab.Button.MouseButton1Click:Connect(function()
         for _, t in pairs(self.Tabs) do
@@ -244,32 +268,27 @@ function Shadow:CreateTab(options)
         tab.Frame.Visible = true
         Tween(tab.Button, { BackgroundColor3 = self.Theme.Secondary }, { Time = 0.1 })
     end)
-    
+
     table.insert(self.Tabs, tab)
     if #self.Tabs == 1 then
-        tab.Button:FireEvent("MouseButton1Click")
+        tab.Button.MouseButton1Click:Fire()
     end
-    
     return tab
 end
 
 -- Section Creation
 function Shadow:CreateSection(tab, options)
+    local parentColumn = options.Side == "Right" and tab.RightColumn or tab.LeftColumn
     local section = CreateInstance("Frame", {
-        Parent = tab.Frame,
-        Size = UDim2.new(0.5, -10, 0, 0),
+        Parent = parentColumn,
+        Size = UDim2.new(1, 0, 0, 0),
         BackgroundColor3 = self.Theme.Secondary,
         BorderSizePixel = 0,
         AutomaticSize = Enum.AutomaticSize.Y
     })
-    if options.Side == "Right" then
-        section.Position = UDim2.new(0.5, 5, 0, 0)
-    else
-        section.Position = UDim2.new(0, 5, 0, 0)
-    end
     CreateInstance("UICorner", { Parent = section, CornerRadius = UDim.new(0, 6) })
     CreateInstance("UIListLayout", { Parent = section, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder })
-    
+
     local header = CreateInstance("TextLabel", {
         Parent = section,
         Size = UDim2.new(1, 0, 0, 30),
@@ -279,7 +298,7 @@ function Shadow:CreateSection(tab, options)
         Font = Enum.Font.GothamSemibold,
         TextSize = 13
     })
-    
+
     if options.Collapsible then
         local collapseButton = CreateInstance("TextButton", {
             Parent = header,
@@ -294,15 +313,14 @@ function Shadow:CreateSection(tab, options)
             collapseButton.Text = section.Visible and "-" or "+"
         end)
     end
-    
+
     -- Element Methods
     function section:CreateToggle(opts)
         local toggle = CreateInstance("Frame", {
             Parent = section,
-            Size = UDim2.new(1, -10, 0, 30),
+            Size = UDim2.new(1, -20, 0, 30),
             BackgroundTransparency = 1
         })
-        
         local label = CreateInstance("TextLabel", {
             Parent = toggle,
             Size = UDim2.new(1, -50, 1, 0),
@@ -313,7 +331,6 @@ function Shadow:CreateSection(tab, options)
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left
         })
-        
         local toggleButton = CreateInstance("Frame", {
             Parent = toggle,
             Size = UDim2.new(0, 40, 0, 20),
@@ -322,38 +339,38 @@ function Shadow:CreateSection(tab, options)
             BorderSizePixel = 0
         })
         CreateInstance("UICorner", { Parent = toggleButton, CornerRadius = UDim.new(1, 0) })
-        
         local indicator = CreateInstance("Frame", {
             Parent = toggleButton,
             Size = UDim2.new(0.5, 0, 1, 0),
             BackgroundColor3 = opts.EnabledByDefault and self.Theme.Accent or self.Theme.Secondary
         })
         CreateInstance("UICorner", { Parent = indicator, CornerRadius = UDim.new(1, 0) })
-        
+
         local enabled = opts.EnabledByDefault or false
         toggleButton.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 enabled = not enabled
                 Tween(indicator, { Position = UDim2.new(enabled and 0.5 or 0, 0, 0, 0), BackgroundColor3 = enabled and self.Theme.Accent or self.Theme.Secondary }, { Time = 0.2 })
-                if opts.OnChange then opts.OnChange(enabled) end
+                if opts.OnChange then
+                    opts.OnChange(enabled)
+                end
             end
         end)
-        
         return toggle
     end
-    
+
     function section:CreateButton(opts)
+        local buttonColor = (opts.Style == "Primary" and self.Theme.Accent) or (opts.Style == "Danger" and Color3.fromRGB(255, 0, 0)) or self.Theme.Secondary
         local button = CreateInstance("TextButton", {
             Parent = section,
-            Size = UDim2.new(1, -10, 0, 30),
-            BackgroundColor3 = self.Theme[opts.Style or "Primary"] == "Primary" and self.Theme.Accent or (opts.Style == "Danger" and Color3.fromRGB(255, 0, 0) or self.Theme.Secondary),
+            Size = UDim2.new(1, -20, 0, 30),
+            BackgroundColor3 = buttonColor,
             Text = opts.Label,
             TextColor3 = self.Theme.Text,
             Font = Enum.Font.Gotham,
             TextSize = 12
         })
         CreateInstance("UICorner", { Parent = button, CornerRadius = UDim.new(0, 4) })
-        
         if opts.Icon then
             CreateInstance("ImageLabel", {
                 Parent = button,
@@ -364,18 +381,16 @@ function Shadow:CreateSection(tab, options)
             })
             button.TextXAlignment = Enum.TextXAlignment.Right
         end
-        
         button.MouseButton1Click:Connect(opts.OnClick or function() end)
         return button
     end
-    
+
     function section:CreateSlider(opts)
         local slider = CreateInstance("Frame", {
             Parent = section,
-            Size = UDim2.new(1, -10, 0, 40),
+            Size = UDim2.new(1, -20, 0, 40),
             BackgroundTransparency = 1
         })
-        
         local label = CreateInstance("TextLabel", {
             Parent = slider,
             Size = UDim2.new(1, 0, 0, 20),
@@ -385,7 +400,6 @@ function Shadow:CreateSection(tab, options)
             Font = Enum.Font.Gotham,
             TextSize = 12
         })
-        
         local sliderBar = CreateInstance("Frame", {
             Parent = slider,
             Size = UDim2.new(1, 0, 0, 10),
@@ -393,14 +407,12 @@ function Shadow:CreateSection(tab, options)
             BackgroundColor3 = self.Theme.Secondary
         })
         CreateInstance("UICorner", { Parent = sliderBar, CornerRadius = UDim.new(1, 0) })
-        
         local fill = CreateInstance("Frame", {
             Parent = sliderBar,
             Size = UDim2.new(0.5, 0, 1, 0),
             BackgroundColor3 = self.Theme.Accent
         })
         CreateInstance("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
-        
         local valueLabel = CreateInstance("TextLabel", {
             Parent = sliderBar,
             Size = UDim2.new(1, 0, 1, 0),
@@ -410,17 +422,19 @@ function Shadow:CreateSection(tab, options)
             Font = Enum.Font.Gotham,
             TextSize = 10
         })
-        
+
         local min, max, step = opts.Range.Min, opts.Range.Max, opts.Step or 1
         local value = opts.StartValue or min
         local function updateValue(newValue)
             value = math.clamp(math.floor(newValue / step) * step, min, max)
             fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
             valueLabel.Text = tostring(value) .. (opts.Unit or "")
-            if opts.OnValueChange then opts.OnValueChange(value) end
+            if opts.OnValueChange then
+                opts.OnValueChange(value)
+            end
         end
         updateValue(value)
-        
+
         local dragging = false
         sliderBar.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -439,17 +453,15 @@ function Shadow:CreateSection(tab, options)
                 updateValue(min + relPos * (max - min))
             end
         end)
-        
         return slider
     end
-    
+
     function section:CreateKeybind(opts)
         local keybind = CreateInstance("Frame", {
             Parent = section,
-            Size = UDim2.new(1, -10, 0, 30),
+            Size = UDim2.new(1, -20, 0, 30),
             BackgroundTransparency = 1
         })
-        
         local label = CreateInstance("TextLabel", {
             Parent = keybind,
             Size = UDim2.new(1, -100, 1, 0),
@@ -460,7 +472,6 @@ function Shadow:CreateSection(tab, options)
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left
         })
-        
         local bindButton = CreateInstance("TextButton", {
             Parent = keybind,
             Size = UDim2.new(0, 80, 1, 0),
@@ -472,7 +483,7 @@ function Shadow:CreateSection(tab, options)
             TextSize = 12
         })
         CreateInstance("UICorner", { Parent = bindButton, CornerRadius = UDim.new(0, 4) })
-        
+
         local currentKey = opts.DefaultKey
         local listening = false
         bindButton.MouseButton1Click:Connect(function()
@@ -484,21 +495,27 @@ function Shadow:CreateSection(tab, options)
                 currentKey = input.KeyCode
                 bindButton.Text = currentKey.Name
                 listening = false
-                if opts.OnBind then opts.OnBind(currentKey) end
+                if opts.OnBind then
+                    opts.OnBind(currentKey)
+                end
             end
         end)
-        
+
         -- Mode (Hold/Toggle/AlwaysOn)
         local mode = opts.Mode or "Hold"
         if mode == "Hold" then
             UserInputService.InputBegan:Connect(function(input)
                 if input.KeyCode == currentKey then
-                    if opts.OnBind then opts.OnBind(true) end
+                    if opts.OnActivate then
+                        opts.OnActivate(true)
+                    end
                 end
             end)
             UserInputService.InputEnded:Connect(function(input)
                 if input.KeyCode == currentKey then
-                    if opts.OnBind then opts.OnBind(false) end
+                    if opts.OnActivate then
+                        opts.OnActivate(false)
+                    end
                 end
             end)
         elseif mode == "Toggle" then
@@ -506,23 +523,25 @@ function Shadow:CreateSection(tab, options)
             UserInputService.InputBegan:Connect(function(input)
                 if input.KeyCode == currentKey then
                     toggled = not toggled
-                    if opts.OnBind then opts.OnBind(toggled) end
+                    if opts.OnActivate then
+                        opts.OnActivate(toggled)
+                    end
                 end
             end)
         elseif mode == "AlwaysOn" then
-            if opts.OnBind then opts.OnBind(true) end
+            if opts.OnActivate then
+                opts.OnActivate(true)
+            end
         end
-        
         return keybind
     end
-    
+
     function section:CreateDropdown(opts)
         local dropdown = CreateInstance("Frame", {
             Parent = section,
-            Size = UDim2.new(1, -10, 0, 30),
+            Size = UDim2.new(1, -20, 0, 30),
             BackgroundTransparency = 1
         })
-        
         local label = CreateInstance("TextLabel", {
             Parent = dropdown,
             Size = UDim2.new(1, 0, 1, 0),
@@ -533,7 +552,6 @@ function Shadow:CreateSection(tab, options)
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left
         })
-        
         local selected = CreateInstance("TextButton", {
             Parent = dropdown,
             Size = UDim2.new(0, 150, 1, 0),
@@ -545,7 +563,7 @@ function Shadow:CreateSection(tab, options)
             TextSize = 12
         })
         CreateInstance("UICorner", { Parent = selected, CornerRadius = UDim.new(0, 4) })
-        
+
         local listFrame = CreateInstance("ScrollingFrame", {
             Parent = dropdown,
             Size = UDim2.new(1, 0, 0, 100),
@@ -558,11 +576,11 @@ function Shadow:CreateSection(tab, options)
         })
         CreateInstance("UICorner", { Parent = listFrame, CornerRadius = UDim.new(0, 4) })
         CreateInstance("UIListLayout", { Parent = listFrame, Padding = UDim.new(0, 2) })
-        
+
         selected.MouseButton1Click:Connect(function()
             listFrame.Visible = not listFrame.Visible
         end)
-        
+
         local selections = opts.MultiSelect and {} or nil
         for _, option in pairs(opts.Options) do
             local optButton = CreateInstance("TextButton", {
@@ -575,11 +593,11 @@ function Shadow:CreateSection(tab, options)
                 TextSize = 12
             })
             CreateInstance("UICorner", { Parent = optButton, CornerRadius = UDim.new(0, 4) })
-            
             optButton.MouseButton1Click:Connect(function()
                 if opts.MultiSelect then
-                    if table.find(selections, option) then
-                        table.remove(selections, table.find(selections, option))
+                    local index = table.find(selections, option)
+                    if index then
+                        table.remove(selections, index)
                     else
                         table.insert(selections, option)
                     end
@@ -588,17 +606,18 @@ function Shadow:CreateSection(tab, options)
                     selected.Text = option
                     listFrame.Visible = false
                 end
-                if opts.OnSelect then opts.OnSelect(opts.MultiSelect and selections or option) end
+                if opts.OnSelect then
+                    opts.OnSelect(opts.MultiSelect and selections or option)
+                end
             end)
         end
-        
         return dropdown
     end
-    
+
     function section:CreateLabel(opts)
         local label = CreateInstance("TextLabel", {
             Parent = section,
-            Size = UDim2.new(1, -10, 0, opts.FontSize + 10),
+            Size = UDim2.new(1, -20, 0, opts.FontSize + 10),
             BackgroundTransparency = 1,
             Text = opts.Content,
             TextColor3 = opts.Color or self.Theme.Text,
@@ -608,16 +627,16 @@ function Shadow:CreateSection(tab, options)
         })
         return label
     end
-    
+
     return section
 end
 
 -- Home Tab (Special Tab)
-function Shadow:CreateHomeTab(window, options)
-    local homeTab = window:CreateTab({ Name = "Home", Icon = options.Icon })
-    local leftSection = homeTab:CreateSection({ Side = "Left", Header = "Welcome" })
-    local rightSection = homeTab:CreateSection({ Side = "Right", Header = "Info" })
-    
+function Shadow:CreateHomeTab(options)
+    local homeTab = self:CreateTab({ Name = "Home", Icon = options.Icon })
+    local leftSection = self:CreateSection(homeTab, { Side = "Left", Header = "Welcome" })
+    local rightSection = self:CreateSection(homeTab, { Side = "Right", Header = "Info" })
+
     -- Backdrop
     if options.BackgroundImage then
         CreateInstance("ImageLabel", {
@@ -629,7 +648,7 @@ function Shadow:CreateHomeTab(window, options)
             ZIndex = -1
         })
     end
-    
+
     -- Discord Invite
     if options.DiscordLink then
         leftSection:CreateButton({
@@ -641,25 +660,25 @@ function Shadow:CreateHomeTab(window, options)
             end
         })
     end
-    
+
     -- Supported Executors
     leftSection:CreateLabel({ Content = "Supported Executors:", FontSize = 12 })
     for _, exec in pairs(options.SupportedPlatforms or {}) do
         leftSection:CreateLabel({ Content = "- " .. exec, FontSize = 11 })
     end
-    
+
     -- Unsupported
     leftSection:CreateLabel({ Content = "Unsupported Executors:", FontSize = 12 })
     for _, exec in pairs(options.UnsupportedPlatforms or {}) do
         leftSection:CreateLabel({ Content = "- " .. exec, FontSize = 11 })
     end
-    
+
     -- Changelog
     rightSection:CreateLabel({ Content = "Changelog:", FontSize = 12 })
     for _, log in pairs(options.UpdateLog or {}) do
         rightSection:CreateLabel({ Content = log.Version .. " (" .. log.ReleaseDate .. "): " .. log.Changes, FontSize = 11 })
     end
-    
+
     -- Load Modules
     for _, mod in pairs(options.Modules or {}) do
         if Modules[mod] then
@@ -667,7 +686,7 @@ function Shadow:CreateHomeTab(window, options)
             -- For example purposes, skip detailed init
         end
     end
-    
+
     return homeTab
 end
 
