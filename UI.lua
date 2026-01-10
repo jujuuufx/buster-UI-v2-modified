@@ -570,54 +570,6 @@ function Buster:CreateWindow(options)
 
     makeDraggable(main, top)
 
-    -- Add resizer
-    local resizeHandle = Instance.new("Frame")
-    resizeHandle.Name = "ResizeHandle"
-    resizeHandle.Size = UDim2.new(0, 20, 0, 20)
-    resizeHandle.Position = UDim2.new(1, -20, 1, -20)
-    resizeHandle.BackgroundTransparency = 1
-    resizeHandle.Parent = main
-
-    local resizeIcon = Instance.new("TextLabel")
-    resizeIcon.Text = "↘"
-    resizeIcon.Size = UDim2.new(1, 0, 1, 0)
-    resizeIcon.BackgroundTransparency = 1
-    resizeIcon.TextColor3 = Theme.SubText
-    resizeIcon.TextSize = 14
-    resizeIcon.Parent = resizeHandle
-
-    local resizeDragging = false
-    local resizeStartPos
-    local resizeStartSize
-
-    resizeHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            resizeDragging = true
-            resizeStartPos = input.Position
-            resizeStartSize = main.Size
-            -- Optional: Change cursor if possible
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if resizeDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - resizeStartPos
-            local newW = resizeStartSize.X.Offset + delta.X
-            local newH = resizeStartSize.Y.Offset + delta.Y
-            newW = math.max(420, newW)
-            newH = math.max(360, newH)
-            main.Size = UDim2.new(0, newW, 0, newH)
-        end
-    end)
-
-    resizeHandle.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            resizeDragging = false
-            restoreSize = main.Size
-            -- Optional: Reset cursor
-        end
-    end)
-
     local minimized = false
     local fullscreen = false
     local restoreSize = main.Size
@@ -817,7 +769,6 @@ function Buster:CreateWindow(options)
     window._keybindListening = false
     window._toggleKey = defaultToggleKey
     window._accentColor = accentColor or Theme.Accent
-    window._elements = {}
 
     local function computeSidebarWidth(w)
         local isPhone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -1174,7 +1125,6 @@ function Buster:CreateWindow(options)
 
             local panel = {}
             panel.Frame = card
-            panel._title = pTitle
 
             function panel:Divider()
                 local dWrap = createRow(body, 6)
@@ -1210,10 +1160,7 @@ function Buster:CreateWindow(options)
                     tWrap.Parent = row
 
                     local cb = opt.Callback or function() end
-                    local obj = createSquareToggle(tWrap, opt.Default or false, cb)
-                    obj._key = window._currentTab.Name .. "." .. (panel._title or "Untitled") .. "." .. (opt.Name or "Untitled")
-                    window._elements[obj._key] = obj
-                    return obj
+                    return createSquareToggle(tWrap, opt.Default or false, cb)
                 end)
                 if not success then
                     warn("Failed to create toggle:", opt.Name)
@@ -1399,17 +1346,14 @@ function Buster:CreateWindow(options)
                     end
                 end)
 
-                local obj = {
+                return {
                     SetValue = function(_, v)
                         setValue(v)
                     end,
                     GetValue = function()
                         return current
-                    end
+                    end,
                 }
-                obj._key = window._currentTab.Name .. "." .. (panel._title or "Untitled") .. "." .. (opt.Name or "Untitled")
-                window._elements[obj._key] = obj
-                return obj
             end
 
             function panel:CreateKeybind(opt)
@@ -1488,54 +1432,23 @@ function Buster:CreateWindow(options)
                     end
                 end)
 
-                local obj = {
+                return {
                     SetValue = function(_, v)
-                        if type(v) == "string" then
-                            if v == "None" then
-                                current = nil
-                                keyBtn.Text = "None"
-                            elseif v == "Mouse1" then
-                                current = Enum.UserInputType.MouseButton1
-                                keyBtn.Text = "Mouse1"
-                            elseif v == "Mouse2" then
-                                current = Enum.UserInputType.MouseButton2
-                                keyBtn.Text = "Mouse2"
-                            else
-                                current = Enum.KeyCode[v] or Enum.KeyCode.Unknown
-                                keyBtn.Text = v
-                            end
-                        elseif typeof(v) == "EnumItem" then
-                            if v.EnumType == Enum.KeyCode then
-                                current = v
-                                keyBtn.Text = v.Name
-                            elseif v == Enum.UserInputType.MouseButton1 then
-                                current = v
-                                keyBtn.Text = "Mouse1"
-                            elseif v == Enum.UserInputType.MouseButton2 then
-                                current = v
-                                keyBtn.Text = "Mouse2"
-                            end
-                        elseif v == nil then
-                            current = nil
+                        current = v
+                        if typeof(current) == "EnumItem" then
+                            keyBtn.Text = current.Name
+                        elseif current == Enum.UserInputType.MouseButton1 then
+                            keyBtn.Text = "Mouse1"
+                        elseif current == Enum.UserInputType.MouseButton2 then
+                            keyBtn.Text = "Mouse2"
+                        else
                             keyBtn.Text = "None"
                         end
                     end,
                     GetValue = function()
-                        if current == nil then
-                            return "None"
-                        elseif current.EnumType == Enum.KeyCode then
-                            return current.Name
-                        elseif current == Enum.UserInputType.MouseButton1 then
-                            return "Mouse1"
-                        elseif current == Enum.UserInputType.MouseButton2 then
-                            return "Mouse2"
-                        end
-                        return "Unknown"
-                    end
+                        return current
+                    end,
                 }
-                obj._key = window._currentTab.Name .. "." .. (panel._title or "Untitled") .. "." .. (opt.Name or "Untitled")
-                window._elements[obj._key] = obj
-                return obj
             end
 
             function panel:CreateDropdown(opt)
@@ -1878,7 +1791,7 @@ function Buster:CreateWindow(options)
                     end
                 end)
 
-                local obj = {
+                return {
                     SetValue = function(_, v)
                         current = v
                         valueLabel.Text = truncateWithStars(tostring(current), 26)
@@ -1909,48 +1822,6 @@ function Buster:CreateWindow(options)
                         autoRefresh()
                     end,
                 }
-                obj._key = window._currentTab.Name .. "." .. (panel._title or "Untitled") .. "." .. (opt.Name or "Untitled")
-                window._elements[obj._key] = obj
-                return obj
-            end
-
-            function panel:CreateTextbox(opt)
-                opt = opt or {}
-                local row = createRow(body, 28)
-                local lbl = createText(row, opt.Name or "Textbox", 12, false, Theme.Text)
-                lbl.Size = UDim2.new(1, -130, 1, 0)
-
-                local tBox = Instance.new("TextBox")
-                tBox.BorderSizePixel = 0
-                tBox.Size = UDim2.new(0, 110, 0, 22)
-                tBox.Position = UDim2.new(1, -110, 0.5, -11)
-                tBox.BackgroundColor3 = Theme.ToggleOff
-                tBox.TextColor3 = Theme.Text
-                tBox.TextSize = 11
-                tBox.Font = Enum.Font.Gotham
-                tBox.Text = opt.Default or ""
-                tBox.Parent = row
-                applyCorner(tBox, 7)
-                applyStroke(tBox, Theme.StrokeSoft, 0.45)
-
-                local obj = {
-                    SetValue = function(_, v)
-                        tBox.Text = tostring(v)
-                    end,
-                    GetValue = function()
-                        return tBox.Text
-                    end
-                }
-                obj._key = window._currentTab.Name .. "." .. (panel._title or "Untitled") .. "." .. (opt.Name or "Untitled")
-                window._elements[obj._key] = obj
-
-                tBox.FocusLost:Connect(function(enter)
-                    if enter then
-                        pcall(opt.Callback or function() end, obj:GetValue())
-                    end
-                end)
-
-                return obj
             end
 
             panel.CreateButton = panel.CreateButton
@@ -2090,7 +1961,7 @@ function Buster:CreateWindow(options)
         settingsTab._button.LayoutOrder = 99999
         local panel = settingsTab:CreatePanel({ Column = "Left", Title = "Settings" })
 
-        local toggleKeybind = panel:CreateKeybind({
+        panel:CreateKeybind({
             Name = "Toggle UI Key",
             Default = defaultToggleKey,
             Callback = function(key)
@@ -2103,8 +1974,9 @@ function Buster:CreateWindow(options)
                 end
             end,
         })
+    end
 
-        panel:Divider()
+      panel:Divider()
         panel:CreateLabel({Text = "Configs", Bold = true, Size = 13})
 
         local configBox = panel:CreateTextbox({Name = "Config JSON", Default = ""})
