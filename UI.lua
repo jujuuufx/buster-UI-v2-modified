@@ -878,7 +878,7 @@ function Buster:CreateWindow(options)
             layout.SortOrder = Enum.SortOrder.LayoutOrder
             layout.Padding = UDim.new(0, 10)
             layout.Parent = sf
-           
+          
             local function updateCanvasSize()
                 pcall(function()
                     if layout and layout.AbsoluteContentSize and sf then
@@ -889,7 +889,7 @@ function Buster:CreateWindow(options)
                     end
                 end)
             end
-           
+          
             pcall(function()
                 layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     updateCanvasSize()
@@ -971,7 +971,7 @@ function Buster:CreateWindow(options)
             cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
             cardLayout.Padding = UDim.new(0, 8)
             cardLayout.Parent = card
-           
+          
             cardLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 pcall(function()
                     if card and cardLayout then
@@ -1001,7 +1001,7 @@ function Buster:CreateWindow(options)
             bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
             bodyLayout.Padding = UDim.new(0, 8)
             bodyLayout.Parent = body
-           
+          
             bodyLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 pcall(function()
                     if body and bodyLayout then
@@ -1086,11 +1086,11 @@ function Buster:CreateWindow(options)
                 btn2.Parent = row
                 applyCorner(btn2, 7)
                 applyStroke(btn2, Theme.Stroke, 0.5)
-               
+              
                 local textPadding = Instance.new("UIPadding")
                 textPadding.PaddingLeft = UDim.new(0, 12)
                 textPadding.Parent = btn2
-               
+              
                 btn2.MouseEnter:Connect(function()
                     tween(btn2, { BackgroundColor3 = Color3.fromRGB(60, 63, 70) }, 0.12)
                 end)
@@ -2285,13 +2285,11 @@ function Buster:CreateHomeTab(window, options)
         grid.BorderSizePixel = 0
         grid.Size = UDim2.new(1, 0, 1, 0)
         grid.Parent = serverBody
-
         local gridLayout = Instance.new("UIGridLayout")
         gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
         gridLayout.CellSize = UDim2.new(0.5, -5, 0, 56)
         gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
         gridLayout.Parent = grid
-
         local function statTile(titleText)
             local tile = Instance.new("Frame")
             tile.Name = "HomeStatTile"
@@ -2300,7 +2298,6 @@ function Buster:CreateHomeTab(window, options)
             tile.Parent = grid
             applyCorner(tile, 10)
             applyStroke(tile, Theme.StrokeSoft, 0.7)
-
             local p = Instance.new("UIPadding")
             p.Name = "HomeStatPad"
             p.PaddingTop = UDim.new(0, 8)
@@ -2308,10 +2305,8 @@ function Buster:CreateHomeTab(window, options)
             p.PaddingRight = UDim.new(0, 10)
             p.PaddingBottom = UDim.new(0, 8)
             p.Parent = tile
-
             local title = createText(tile, titleText, 11, true, Theme.Text)
             title.Size = UDim2.new(1, 0, 0, 16)
-
             local value = createText(tile, "", 11, false, Theme.SubText)
             value.Position = UDim2.new(0, 0, 0, 18)
             value.Size = UDim2.new(1, 0, 0, 30)
@@ -2319,7 +2314,6 @@ function Buster:CreateHomeTab(window, options)
             value.TextYAlignment = Enum.TextYAlignment.Top
             return tile, value
         end
-
         local tilePlayers, valPlayers = statTile("Players")
         local tileCapacity, valCapacity = statTile("Capacity")
         local tileLatency, valLatency = statTile("Latency")
