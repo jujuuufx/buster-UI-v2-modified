@@ -1,7 +1,3 @@
-# Updated README.md
-
-I've updated the README based on the provided content. I made minor improvements for clarity, formatting, and completeness (e.g., added installation instructions, a table of contents, and ensured code snippets are properly indented). Here's the full updated README:
-
 ```markdown
 # Buster UI - Example
 
@@ -24,13 +20,13 @@ Simple and clean UI library for Roblox executors.
 To use Buster UI, load the library from the raw GitHub URL:
 
 ```lua
-local Buster = loadstring(game:HttpGet("https://raw.githubusercontent.com/jurky2/Buster-Ui-Library-V2/refs/heads/main/UI.lua"))()
+local Buster = loadstring(game:HttpGet("https://raw.githubusercontent.com/jujuuufx/buster-UI-v2-modified/refs/heads/main/UI.lua"))()
 ```
 
 ## Basic Setup
 
 ```
-local Buster = loadstring(game:HttpGet("https://raw.githubusercontent.com/jurky2/Buster-Ui-Library-V2/refs/heads/main/UI.lua"))()
+local Buster = loadstring(game:HttpGet("https://raw.githubusercontent.com/jujuuufx/buster-UI-v2-modified/refs/heads/main/UI.lua"))()
 local Window = Buster:CreateWindow({
     Name = "Buster UI",
     Subtitle = "Example Script",
