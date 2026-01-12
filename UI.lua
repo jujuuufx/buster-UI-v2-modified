@@ -67,6 +67,7 @@ local CoreGui = game:GetService("CoreGui")
 local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local HttpService = game:GetService("HttpService")
 local function getInsetY()
     local insetY = 0
     pcall(function()
@@ -697,6 +698,11 @@ function Buster:CreateWindow(options)
     window._toggleKey = defaultToggleKey
     window._accentColor = accentColor or Theme.Accent
     window._controls = {}
+    local configFolder = "BusterConfigs/" .. tostring(game.PlaceId) .. "/"
+    if not isfolder(configFolder) then
+        makefolder(configFolder)
+    end
+    window._configFolder = configFolder
     local function computeSidebarWidth(w)
         local isPhone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
         if isPhone then
@@ -1652,30 +1658,78 @@ function Buster:CreateWindow(options)
                         autoRefresh()
                     end,
                 }
+                table.insert(self._window._controls, {
+                    Tab = self._tab.Name,
+                    Panel = self._title,
+                    Name = opt.Name or "Dropdown",
+                    Type = "Dropdown",
+                    Element = dropdown
+                })
+                return dropdown
             end
-
+            function panel:CreateTextbox(opt)
+                opt = opt or {}
+                local nameText = opt.Name or "Textbox"
+                local default = opt.Default or ""
+                local cb = opt.Callback or function() end
+                local wrap = Instance.new("Frame")
+                wrap.BackgroundTransparency = 1
+                wrap.BorderSizePixel = 0
+                wrap.Size = UDim2.new(1, 0, 0, 46)
+                wrap.Parent = body
+                local titleRow = createRow(wrap, 18)
+                local lbl = createText(titleRow, nameText, 12, false, Theme.Text)
+                lbl.Size = UDim2.new(1, 0, 1, 0)
+                local textbox = Instance.new("TextBox")
+                textbox.BackgroundColor3 = Theme.Card2
+                textbox.BorderSizePixel = 0
+                textbox.Size = UDim2.new(1, 0, 0, 30)
+                textbox.Position = UDim2.new(0, 0, 0, 16)
+                textbox.Text = default
+                textbox.TextColor3 = Theme.Text
+                textbox.TextSize = 11
+                textbox.Font = Enum.Font.Gotham
+                textbox.Parent = wrap
+                applyCorner(textbox, 7)
+                applyStroke(textbox, Theme.StrokeSoft, 0.25)
+                textbox.FocusLost:Connect(function(enterPressed)
+                    if enterPressed then
+                        pcall(cb, textbox.Text)
+                    end
+                end)
+                local textBox = {
+                    SetValue = function(_, v)
+                        textbox.Text = tostring(v)
+                    end,
+                    GetValue = function()
+                        return textbox.Text
+                    end,
+                }
+                table.insert(self._window._controls, {
+                    Tab = self._tab.Name,
+                    Panel = self._title,
+                    Name = nameText,
+                    Type = "Textbox",
+                    Element = textBox
+                })
+                return textBox
+            end
             panel.CreateButton = panel.CreateButton
-
             return panel
         end
-
         function tab:CreatePanel(panelOptions)
             return makePanel(panelOptions and panelOptions.Column or "Left", panelOptions)
         end
-
         function tab:CreateSection(sectionName)
             return makePanel("Left", { Title = sectionName })
         end
-
         table.insert(window._tabs, tab)
         if #window._tabs == 1 then
             setTabActive(tab, true)
             window._currentTab = tab
         end
-
         return tab
     end
-
     local notifyHost = Instance.new("Frame")
     notifyHost.Name = "Notifications"
     notifyHost.BackgroundTransparency = 1
@@ -1684,19 +1738,16 @@ function Buster:CreateWindow(options)
     notifyHost.Position = UDim2.new(1, -332, 0, 12)
     notifyHost.ZIndex = 10_100
     notifyHost.Parent = overlay
-
     local notifyLayout = Instance.new("UIListLayout")
     notifyLayout.SortOrder = Enum.SortOrder.LayoutOrder
     notifyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     notifyLayout.Padding = UDim.new(0, 8)
     notifyLayout.Parent = notifyHost
-
     function window:Notify(opt)
         opt = opt or {}
         local nTitle = opt.Title or titleText
         local nText = opt.Text or ""
         local duration = opt.Duration or 2.5
-
         local toast = Instance.new("Frame")
         toast.BackgroundColor3 = Theme.Card
         toast.BorderSizePixel = 0
@@ -1705,26 +1756,21 @@ function Buster:CreateWindow(options)
         toast.Parent = notifyHost
         applyCorner(toast, 10)
         applyStroke(toast, Theme.StrokeSoft, 0.55)
-
         local pad = Instance.new("UIPadding")
         pad.PaddingTop = UDim.new(0, 8)
         pad.PaddingBottom = UDim.new(0, 8)
         pad.PaddingLeft = UDim.new(0, 10)
         pad.PaddingRight = UDim.new(0, 10)
         pad.Parent = toast
-
         local t1 = createText(toast, tostring(nTitle), 12, true, Theme.Text)
         t1.Size = UDim2.new(1, 0, 0, 18)
         t1.ZIndex = 10_120
-
         local t2 = createText(toast, tostring(nText), 11, false, Theme.SubText)
         t2.Size = UDim2.new(1, 0, 0, 16)
         t2.Position = UDim2.new(0, 0, 0, 20)
         t2.ZIndex = 10_120
-
         toast.BackgroundTransparency = 1
         tween(toast, { BackgroundTransparency = 0 }, 0.14)
-
         task.delay(duration, function()
             if toast and toast.Parent then
                 tween(toast, { BackgroundTransparency = 1 }, 0.14)
@@ -1735,7 +1781,6 @@ function Buster:CreateWindow(options)
             end
         end)
     end
-
     function window:Toggle()
         if not main.Visible then
             main.Visible = true
@@ -1749,48 +1794,94 @@ function Buster:CreateWindow(options)
             main.Visible = false
         end
     end
-
     function window:SetTitle(text)
         window._titleLabel.Text = tostring(text)
     end
-
     function window:SetFooter(text)
         window._subtitleLabel.Text = "| " .. tostring(text)
     end
-
     function window:SetBrandText(text)
         window._brandTextLabel.Text = tostring(text)
         window._brandTextLabel.Visible = true
         window._brandImageLabel.Visible = false
-
         outsideText.Text = tostring(text)
         outsideText.Visible = true
         outsideImg.Visible = false
     end
-
     function window:SetBrandImage(image)
         window._brandImageLabel.Image = tostring(image or "")
         window._brandImageLabel.Visible = window._brandImageLabel.Image ~= ""
         window._brandTextLabel.Visible = not window._brandImageLabel.Visible
-
         outsideImg.Image = tostring(image or "")
         outsideImg.Visible = outsideImg.Image ~= ""
         outsideText.Visible = not outsideImg.Visible
     end
-
     function window:Destroy()
         screen:Destroy()
     end
-
     function window:SetToggleKey(key)
         window._toggleKey = key
     end
-
+    function window:SaveConfig(configName)
+        local data = {}
+        for _, control in ipairs(window._controls) do
+            local key = control.Tab .. "." .. control.Panel .. "." .. control.Name
+            local val = control.Element:GetValue()
+            if typeof(val) == "EnumItem" then
+                val = val.EnumType.Name .. "." .. val.Name
+            end
+            data[key] = val
+        end
+        local json = HttpService:JSONEncode(data)
+        writefile(window._configFolder .. configName .. ".json", json)
+        window:Notify({ Title = "Configs", Text = "Saved config: " .. configName, Duration = 2 })
+    end
+    function window:LoadConfig(configName)
+        local file = window._configFolder .. configName .. ".json"
+        if not isfile(file) then
+            window:Notify({ Title = "Configs", Text = "Config not found: " .. configName, Duration = 2 })
+            return
+        end
+        local json = readfile(file)
+        local data = HttpService:JSONDecode(json)
+        for _, control in ipairs(window._controls) do
+            local key = control.Tab .. "." .. control.Panel .. "." .. control.Name
+            local val = data[key]
+            if val then
+                if type(val) == "string" and string.find(val, "%.") then
+                    local enumType, enumName = val:match("^(.-)%.(.-)$")
+                    if Enum[enumType] and Enum[enumType][enumName] then
+                        val = Enum[enumType][enumName]
+                    end
+                end
+                control.Element:SetValue(val)
+            end
+        end
+        window:Notify({ Title = "Configs", Text = "Loaded config: " .. configName, Duration = 2 })
+    end
+    function window:DeleteConfig(configName)
+        local file = window._configFolder .. configName .. ".json"
+        if isfile(file) then
+            delfile(file)
+            window:Notify({ Title = "Configs", Text = "Deleted config: " .. configName, Duration = 2 })
+        else
+            window:Notify({ Title = "Configs", Text = "Config not found: " .. configName, Duration = 2 })
+        end
+    end
+    function window:GetConfigs()
+        local configs = {}
+        for _, file in ipairs(listfiles(window._configFolder)) do
+            local name = file:match("^.+/(.-)%.json$")
+            if name then
+                table.insert(configs, name)
+            end
+        end
+        return configs
+    end
     do
         local settingsTab = window:CreateTab("Settings")
         settingsTab._button.LayoutOrder = 99999
         local panel = settingsTab:CreatePanel({ Column = "Left", Title = "Settings" })
-
         panel:CreateKeybind({
             Name = "Toggle UI Key",
             Default = defaultToggleKey,
@@ -1804,8 +1895,62 @@ function Buster:CreateWindow(options)
                 end
             end,
         })
+        local configPanel = settingsTab:CreatePanel({ Column = "Right", Title = "Configs" })
+        local configNameBox = configPanel:CreateTextbox({
+            Name = "Config Name",
+            Default = "default",
+        })
+        local configDropdown = configPanel:CreateDropdown({
+            Name = "Existing Configs",
+            List = window:GetConfigs(),
+            Default = "",
+        })
+        configDropdown:StartAutoRefresh()
+        configPanel:CreateButton({
+            Name = "Create Config",
+            Callback = function()
+                local name = configNameBox:GetValue()
+                if name ~= "" then
+                    if not isfile(window._configFolder .. name .. ".json") then
+                        writefile(window._configFolder .. name .. ".json", "{}")
+                        configDropdown:UpdateList(window:GetConfigs())
+                        window:Notify({ Title = "Configs", Text = "Created config: " .. name, Duration = 2 })
+                    else
+                        window:Notify({ Title = "Configs", Text = "Config exists: " .. name, Duration = 2 })
+                    end
+                end
+            end
+        })
+        configPanel:CreateButton({
+            Name = "Save Config",
+            Callback = function()
+                local name = configNameBox:GetValue()
+                if name ~= "" then
+                    window:SaveConfig(name)
+                    configDropdown:UpdateList(window:GetConfigs())
+                end
+            end
+        })
+        configPanel:CreateButton({
+            Name = "Load Config",
+            Callback = function()
+                local name = configDropdown:GetValue()
+                if name ~= "" then
+                    window:LoadConfig(name)
+                end
+            end
+        })
+        configPanel:CreateButton({
+            Name = "Delete Config",
+            Callback = function()
+                local name = configDropdown:GetValue()
+                if name ~= "" then
+                    window:DeleteConfig(name)
+                    configDropdown:UpdateList(window:GetConfigs())
+                end
+            end
+        })
     end
-
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then
             return
@@ -1817,55 +1962,45 @@ function Buster:CreateWindow(options)
         if not key then
             return
         end
-
         if typeof(key) == "EnumItem" and key.EnumType == Enum.KeyCode then
             if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == key then
                 window:Toggle()
             end
             return
         end
-
         if typeof(key) == "EnumItem" and key.EnumType == Enum.UserInputType then
             if input.UserInputType == key then
                 window:Toggle()
             end
         end
     end)
-
     outsideToggle.MouseButton1Click:Connect(function()
         window:Toggle()
         if isMobileToggle and outsideText and outsideText.Parent then
             outsideText.Text = main.Visible and "Close" or "Open"
         end
     end)
-
     return window
 end
-
 function Buster:CreateHomeTab(window, options)
     options = options or {}
-
     local tabName = options.Name or "Home"
     local tabIcon = options.Icon
     local homeTab = window:CreateTab({ Name = tabName, Icon = tabIcon })
-
     local RunService = game:GetService("RunService")
     local StatsService = game:GetService("Stats")
     local MarketplaceService = game:GetService("MarketplaceService")
     local LocalizationService = game:GetService("LocalizationService")
-
     local discordInvite = options.DiscordInvite or ""
     local supportedExecutors = options.SupportedExecutors or {}
     local unsupportedExecutors = options.UnsupportedExecutors or {}
     local changelog = options.Changelog or {}
-
     local content = homeTab._content
     local leftCol = content and content:FindFirstChild("Left")
     local rightCol = content and content:FindFirstChild("Right")
     if not content or not leftCol or not rightCol then
         return homeTab
     end
-
     for _, child in ipairs(content:GetChildren()) do
         if string.sub(child.Name, 1, 4) == "Home" then
             child:Destroy()
@@ -1878,7 +2013,6 @@ function Buster:CreateHomeTab(window, options)
             end
         end
     end
-
     local function safeDestroyConnection(conn)
         if conn and typeof(conn) == "RBXScriptConnection" then
             pcall(function()
@@ -1886,7 +2020,6 @@ function Buster:CreateHomeTab(window, options)
             end)
         end
     end
-
     local destroyed = false
     local connections = {}
     content.AncestryChanged:Connect(function(_, parent)
@@ -1897,7 +2030,6 @@ function Buster:CreateHomeTab(window, options)
             end
         end
     end)
-
     local function createCard(parent, titleText, subtitleText, iconImage, fixedHeight)
         local cardInset = 6
         local card = Instance.new("Frame")
@@ -1909,7 +2041,6 @@ function Buster:CreateHomeTab(window, options)
         card.Parent = parent
         applyCorner(card, 10)
         applyStroke(card, Theme.StrokeSoft, 0.55)
-
         local cardPad = Instance.new("UIPadding")
         cardPad.Name = "HomePad"
         cardPad.PaddingTop = UDim.new(0, 10)
@@ -1917,14 +2048,12 @@ function Buster:CreateHomeTab(window, options)
         cardPad.PaddingRight = UDim.new(0, 10)
         cardPad.PaddingBottom = UDim.new(0, 10)
         cardPad.Parent = card
-
         local headerRow = Instance.new("Frame")
         headerRow.Name = "HomeHeader"
         headerRow.BackgroundTransparency = 1
         headerRow.BorderSizePixel = 0
         headerRow.Size = UDim2.new(1, 0, 0, 22)
         headerRow.Parent = card
-
         local icon = Instance.new("ImageLabel")
         icon.Name = "HomeIcon"
         icon.BackgroundTransparency = 1
@@ -1935,13 +2064,11 @@ function Buster:CreateHomeTab(window, options)
         icon.ImageColor3 = Theme.Text
         icon.Visible = icon.Image ~= ""
         icon.Parent = headerRow
-
         local title = createText(headerRow, titleText or "", 13, true, Theme.Text)
         title.Name = "HomeTitle"
         title.Size = UDim2.new(1, -22, 1, 0)
         title.Position = UDim2.new(0, icon.Visible and 22 or 0, 0, 0)
         title.TextXAlignment = Enum.TextXAlignment.Left
-
         local subtitle = nil
         if subtitleText and subtitleText ~= "" then
             subtitle = createText(card, subtitleText, 11, false, Theme.SubText)
@@ -1950,7 +2077,6 @@ function Buster:CreateHomeTab(window, options)
             subtitle.Position = UDim2.new(0, 0, 0, 26)
             subtitle.TextXAlignment = Enum.TextXAlignment.Left
         end
-
         local body = Instance.new("Frame")
         body.Name = "HomeBody"
         body.BackgroundTransparency = 1
@@ -1958,14 +2084,11 @@ function Buster:CreateHomeTab(window, options)
         body.Position = UDim2.new(0, 0, 0, subtitle and 46 or 28)
         body.Size = UDim2.new(1, 0, 1, -(subtitle and 46 or 28))
         body.Parent = card
-
         return card, body
     end
-
     local welcomeHeight = 110
     local topGap = 12
     local topOffset = welcomeHeight + topGap
-
     local welcome = Instance.new("Frame")
     welcome.Name = "HomeWelcome"
     welcome.BackgroundColor3 = Theme.Card
@@ -1975,7 +2098,6 @@ function Buster:CreateHomeTab(window, options)
     welcome.Parent = content
     applyCorner(welcome, 12)
     applyStroke(welcome, Theme.Accent, 0.75)
-
     local backdrop = Instance.new("ImageLabel")
     backdrop.Name = "HomeBackdrop"
     backdrop.BackgroundTransparency = 1
@@ -1987,7 +2109,6 @@ function Buster:CreateHomeTab(window, options)
     backdrop.ZIndex = 1
     backdrop.Parent = welcome
     applyCorner(backdrop, 12)
-
     if options.Backdrop ~= nil then
         if options.Backdrop == 0 then
             backdrop.Image = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. game.PlaceId .. "&width=768&height=432&format=png"
@@ -1995,7 +2116,6 @@ function Buster:CreateHomeTab(window, options)
             backdrop.Image = "rbxassetid://" .. tostring(options.Backdrop)
         end
     end
-
     local backdropFade = Instance.new("Frame")
     backdropFade.Name = "HomeBackdropFade"
     backdropFade.BackgroundColor3 = Theme.Card
@@ -2005,7 +2125,6 @@ function Buster:CreateHomeTab(window, options)
     backdropFade.ZIndex = 2
     backdropFade.Parent = welcome
     applyCorner(backdropFade, 12)
-
     local welcomePad = Instance.new("UIPadding")
     welcomePad.Name = "HomeWelcomePad"
     welcomePad.PaddingTop = UDim.new(0, 12)
@@ -2013,7 +2132,6 @@ function Buster:CreateHomeTab(window, options)
     welcomePad.PaddingRight = UDim.new(0, 12)
     welcomePad.PaddingBottom = UDim.new(0, 12)
     welcomePad.Parent = welcome
-
     local welcomeContent = Instance.new("Frame")
     welcomeContent.Name = "HomeWelcomeContent"
     welcomeContent.BackgroundTransparency = 1
@@ -2021,7 +2139,6 @@ function Buster:CreateHomeTab(window, options)
     welcomeContent.Size = UDim2.new(1, 0, 1, 0)
     welcomeContent.ZIndex = 3
     welcomeContent.Parent = welcome
-
     local avatarWrap = Instance.new("Frame")
     avatarWrap.Name = "HomeAvatarWrap"
     avatarWrap.BackgroundColor3 = Theme.Card2
@@ -2032,7 +2149,6 @@ function Buster:CreateHomeTab(window, options)
     avatarWrap.Parent = welcomeContent
     applyCorner(avatarWrap, 27)
     applyStroke(avatarWrap, Theme.StrokeSoft, 0.65)
-
     local avatarImg = Instance.new("ImageLabel")
     avatarImg.Name = "HomeAvatar"
     avatarImg.BackgroundTransparency = 1
@@ -2042,7 +2158,6 @@ function Buster:CreateHomeTab(window, options)
     avatarImg.ZIndex = 5
     avatarImg.Parent = avatarWrap
     applyCorner(avatarImg, 27)
-
     task.spawn(function()
         pcall(function()
             local lp = Players.LocalPlayer
@@ -2055,20 +2170,17 @@ function Buster:CreateHomeTab(window, options)
             end
         end)
     end)
-
     local welcomeTitle = createText(welcomeContent, "Welcome, " .. tostring((Players.LocalPlayer and Players.LocalPlayer.DisplayName) or "User"), 18, true, Theme.Text)
     welcomeTitle.Name = "HomeWelcomeTitle"
     welcomeTitle.Position = UDim2.new(0, 66, 0, 18)
     welcomeTitle.Size = UDim2.new(1, -220, 0, 22)
     welcomeTitle.ZIndex = 5
-
     local welcomeSub = createText(welcomeContent, "", 12, false, Theme.Text)
     welcomeSub.Name = "HomeWelcomeSub"
     welcomeSub.Position = UDim2.new(0, 66, 0, 42)
     welcomeSub.Size = UDim2.new(1, -220, 0, 18)
     welcomeSub.ZIndex = 5
     welcomeSub.TextTransparency = 0.25
-
     local timeLabel = createText(welcomeContent, "", 12, false, Theme.Text)
     timeLabel.Name = "HomeTime"
     timeLabel.TextXAlignment = Enum.TextXAlignment.Right
@@ -2076,7 +2188,6 @@ function Buster:CreateHomeTab(window, options)
     timeLabel.Size = UDim2.new(0, 200, 0, 18)
     timeLabel.ZIndex = 5
     timeLabel.TextTransparency = 0.25
-
     local dateLabel = createText(welcomeContent, "", 12, false, Theme.Text)
     dateLabel.Name = "HomeDate"
     dateLabel.TextXAlignment = Enum.TextXAlignment.Right
@@ -2084,7 +2195,6 @@ function Buster:CreateHomeTab(window, options)
     dateLabel.Size = UDim2.new(0, 200, 0, 18)
     dateLabel.ZIndex = 5
     dateLabel.TextTransparency = 0.25
-
     local function getGreetingString(hour)
         if hour >= 4 and hour < 12 then
             return "Good Morning!"
@@ -2097,7 +2207,6 @@ function Buster:CreateHomeTab(window, options)
         end
         return "Jeez you should be asleep..."
     end
-
     task.spawn(function()
         while not destroyed and welcome and welcome.Parent do
             local t = os.date("*t")
@@ -2110,38 +2219,30 @@ function Buster:CreateHomeTab(window, options)
             task.wait(1)
         end
     end)
-
     local function applyHomeColumns(w)
         local h = content.AbsoluteSize.Y
         local remaining = math.max(0, h - topOffset)
-
         if w < 720 then
             local leftH = math.max(0, math.floor(remaining * 0.52 - 6))
             local rightH = math.max(0, remaining - leftH - 12)
-
             leftCol.Size = UDim2.new(1, 0, 0, leftH)
             leftCol.Position = UDim2.new(0, 0, 0, topOffset)
-
             rightCol.Size = UDim2.new(1, 0, 0, rightH)
             rightCol.Position = UDim2.new(0, 0, 0, topOffset + leftH + 12)
         else
             leftCol.Size = UDim2.new(0.58, -8, 1, -topOffset)
             leftCol.Position = UDim2.new(0, 0, 0, topOffset)
-
             rightCol.Size = UDim2.new(0.42, -8, 1, -topOffset)
             rightCol.Position = UDim2.new(0.58, 16, 0, topOffset)
         end
     end
-
     homeTab._applyColumns = applyHomeColumns
     applyHomeColumns(window._main.Size.X.Offset)
     table.insert(connections, content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
         applyHomeColumns(window._main.Size.X.Offset)
     end))
-
     do
         local discordCard = createCard(leftCol, "Discord", "Tap to join the discord of\nyour script.", options.DiscordIcon, 88)
-
         local discordInteract = Instance.new("TextButton")
         discordInteract.Name = "HomeDiscordInteract"
         discordInteract.AutoButtonColor = false
@@ -2151,7 +2252,6 @@ function Buster:CreateHomeTab(window, options)
         discordInteract.Size = UDim2.new(1, 0, 1, 0)
         discordInteract.Position = UDim2.new(0, 0, 0, 0)
         discordInteract.Parent = discordCard
-
         discordInteract.MouseEnter:Connect(function()
             tween(discordCard, { BackgroundColor3 = Theme.Card2 }, 0.12)
         end)
@@ -2168,12 +2268,10 @@ function Buster:CreateHomeTab(window, options)
             end)
             window:Notify({ Title = "Discord", Text = "Invite copied", Duration = 2 })
         end)
-
         local gameName = "Unknown"
         pcall(function()
             gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
         end)
-
         local serverCard, serverBody = createCard(
             leftCol,
             "Server",
@@ -2181,7 +2279,6 @@ function Buster:CreateHomeTab(window, options)
             options.ServerIcon,
             250
         )
-
         local grid = Instance.new("Frame")
         grid.Name = "HomeServerGrid"
         grid.BackgroundTransparency = 1
