@@ -1,13 +1,3 @@
-Yeah, this README was a mess 😭
-Here’s a **clean, fixed, consistent, copy-paste–ready README** with:
-
-* ✅ Correct Markdown fencing
-* ✅ Consistent repo URL
-* ✅ Proper language tags
-* ✅ No broken/nested code blocks
-* ✅ Clear structure
-* ✅ One working example script
-
 ---
 
 ````markdown
