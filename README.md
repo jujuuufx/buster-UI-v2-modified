@@ -1,6 +1,4 @@
----
 
-````markdown
 # Buster UI
 
 A simple, clean, and modern UI library for Roblox executors.
