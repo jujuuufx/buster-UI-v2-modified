@@ -878,7 +878,7 @@ function Buster:CreateWindow(options)
             layout.SortOrder = Enum.SortOrder.LayoutOrder
             layout.Padding = UDim.new(0, 10)
             layout.Parent = sf
-          
+         
             local function updateCanvasSize()
                 pcall(function()
                     if layout and layout.AbsoluteContentSize and sf then
@@ -889,7 +889,7 @@ function Buster:CreateWindow(options)
                     end
                 end)
             end
-          
+         
             pcall(function()
                 layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     updateCanvasSize()
@@ -971,7 +971,7 @@ function Buster:CreateWindow(options)
             cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
             cardLayout.Padding = UDim.new(0, 8)
             cardLayout.Parent = card
-          
+         
             cardLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 pcall(function()
                     if card and cardLayout then
@@ -1001,7 +1001,7 @@ function Buster:CreateWindow(options)
             bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
             bodyLayout.Padding = UDim.new(0, 8)
             bodyLayout.Parent = body
-          
+         
             bodyLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 pcall(function()
                     if body and bodyLayout then
@@ -1086,11 +1086,11 @@ function Buster:CreateWindow(options)
                 btn2.Parent = row
                 applyCorner(btn2, 7)
                 applyStroke(btn2, Theme.Stroke, 0.5)
-              
+             
                 local textPadding = Instance.new("UIPadding")
                 textPadding.PaddingLeft = UDim.new(0, 12)
                 textPadding.Parent = btn2
-              
+             
                 btn2.MouseEnter:Connect(function()
                     tween(btn2, { BackgroundColor3 = Color3.fromRGB(60, 63, 70) }, 0.12)
                 end)
@@ -1900,12 +1900,6 @@ function Buster:CreateWindow(options)
             Name = "Config Name",
             Default = "default",
         })
-        local configDropdown = configPanel:CreateDropdown({
-            Name = "Existing Configs",
-            List = window:GetConfigs(),
-            Default = "",
-        })
-        configDropdown:StartAutoRefresh()
         configPanel:CreateButton({
             Name = "Create Config",
             Callback = function()
@@ -1913,7 +1907,6 @@ function Buster:CreateWindow(options)
                 if name ~= "" then
                     if not isfile(window._configFolder .. name .. ".json") then
                         writefile(window._configFolder .. name .. ".json", "{}")
-                        configDropdown:UpdateList(window:GetConfigs())
                         window:Notify({ Title = "Configs", Text = "Created config: " .. name, Duration = 2 })
                     else
                         window:Notify({ Title = "Configs", Text = "Config exists: " .. name, Duration = 2 })
@@ -1927,14 +1920,13 @@ function Buster:CreateWindow(options)
                 local name = configNameBox:GetValue()
                 if name ~= "" then
                     window:SaveConfig(name)
-                    configDropdown:UpdateList(window:GetConfigs())
                 end
             end
         })
         configPanel:CreateButton({
             Name = "Load Config",
             Callback = function()
-                local name = configDropdown:GetValue()
+                local name = configNameBox:GetValue()
                 if name ~= "" then
                     window:LoadConfig(name)
                 end
@@ -1943,10 +1935,9 @@ function Buster:CreateWindow(options)
         configPanel:CreateButton({
             Name = "Delete Config",
             Callback = function()
-                local name = configDropdown:GetValue()
+                local name = configNameBox:GetValue()
                 if name ~= "" then
                     window:DeleteConfig(name)
-                    configDropdown:UpdateList(window:GetConfigs())
                 end
             end
         })
