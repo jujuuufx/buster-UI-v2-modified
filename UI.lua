@@ -878,7 +878,7 @@ function Buster:CreateWindow(options)
             layout.SortOrder = Enum.SortOrder.LayoutOrder
             layout.Padding = UDim.new(0, 10)
             layout.Parent = sf
-         
+        
             local function updateCanvasSize()
                 pcall(function()
                     if layout and layout.AbsoluteContentSize and sf then
@@ -889,7 +889,7 @@ function Buster:CreateWindow(options)
                     end
                 end)
             end
-         
+        
             pcall(function()
                 layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     updateCanvasSize()
@@ -971,7 +971,7 @@ function Buster:CreateWindow(options)
             cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
             cardLayout.Padding = UDim.new(0, 8)
             cardLayout.Parent = card
-         
+        
             cardLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 pcall(function()
                     if card and cardLayout then
@@ -1001,7 +1001,7 @@ function Buster:CreateWindow(options)
             bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
             bodyLayout.Padding = UDim.new(0, 8)
             bodyLayout.Parent = body
-         
+        
             bodyLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 pcall(function()
                     if body and bodyLayout then
@@ -1086,11 +1086,11 @@ function Buster:CreateWindow(options)
                 btn2.Parent = row
                 applyCorner(btn2, 7)
                 applyStroke(btn2, Theme.Stroke, 0.5)
-             
+            
                 local textPadding = Instance.new("UIPadding")
                 textPadding.PaddingLeft = UDim.new(0, 12)
                 textPadding.Parent = btn2
-             
+            
                 btn2.MouseEnter:Connect(function()
                     tween(btn2, { BackgroundColor3 = Color3.fromRGB(60, 63, 70) }, 0.12)
                 end)
@@ -1823,8 +1823,9 @@ function Buster:CreateWindow(options)
         window._toggleKey = key
     end
     function window:SaveConfig(configName)
-        local data = {}
-        for _, control in ipairs(window._controls) do
+    local data = {}
+    for _, control in ipairs(window._controls) do
+        if control.Tab ~= "Settings" then
             local key = control.Tab .. "." .. control.Panel .. "." .. control.Name
             local val = control.Element:GetValue()
             if typeof(val) == "EnumItem" then
@@ -1832,10 +1833,11 @@ function Buster:CreateWindow(options)
             end
             data[key] = val
         end
-        local json = HttpService:JSONEncode(data)
-        writefile(window._configFolder .. configName .. ".json", json)
-        window:Notify({ Title = "Configs", Text = "Saved config: " .. configName, Duration = 2 })
     end
+    local json = HttpService:JSONEncode(data)
+    writefile(window._configFolder .. configName .. ".json", json)
+    window:Notify({ Title = "Configs", Text = "Saved config: " .. configName, Duration = 2 })
+end
     function window:LoadConfig(configName)
         local file = window._configFolder .. configName .. ".json"
         if not isfile(file) then
