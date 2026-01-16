@@ -2639,8 +2639,8 @@ function Buster:CreateWindow(options)
                 end)
             )
         end
-    
-        )
+            )
+        end
     end
 
     return homeTab
@@ -2649,5 +2649,3 @@ end
 Buster.BronxUI = Buster
 
 return Buster
-
-end
