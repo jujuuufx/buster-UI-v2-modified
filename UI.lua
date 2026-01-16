@@ -2636,7 +2636,7 @@ function Buster:CreateWindow(options)
                         return
                     end
                     checkFriends()
-                end)
+             end)
             )
         end
 
