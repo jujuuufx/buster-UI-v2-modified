@@ -77,20 +77,29 @@ local function getInsetY()
     return insetY
 end
 local Theme = {
-    Bg = Color3.fromRGB(23, 25, 29), -- Backgrounds.Dark
-    Top = Color3.fromRGB(27, 29, 33), -- Backgrounds.Medium
-    Side = Color3.fromRGB(27, 29, 33), -- Backgrounds.Medium
-    Card = Color3.fromRGB(33, 34, 38), -- Backgrounds.Light
-    Card2 = Color3.fromRGB(33, 36, 42), -- Backgrounds.Groupbox
-    Stroke = Color3.fromRGB(65, 69, 77), -- Foregrounds.Dark
-    StrokeSoft = Color3.fromRGB(65, 69, 77), -- Foregrounds.Dark
-    Text = Color3.fromRGB(255, 255, 255), -- Foregrounds.Active
-    SubText = Color3.fromRGB(165, 165, 165), -- Foregrounds.Medium
+    Bg = Color3.fromRGB(23, 25, 29),
+    Top = Color3.fromRGB(27, 29, 33),
+    Side = Color3.fromRGB(27, 29, 33),
+    Card = Color3.fromRGB(33, 34, 38),
+    Card2 = Color3.fromRGB(33, 36, 42),
+    Stroke = Color3.fromRGB(65, 69, 77),
+    StrokeSoft = Color3.fromRGB(65, 69, 77),
+    Text = Color3.fromRGB(255, 255, 255),
+    SubText = Color3.fromRGB(165, 165, 165),
     Accent = Color3.fromRGB(161, 169, 225),
-    ToggleOff = Color3.fromRGB(17, 19, 22), -- Backgrounds.Highlight
-    Track = Color3.fromRGB(33, 34, 38), -- Backgrounds.Light
+    ToggleOff = Color3.fromRGB(17, 19, 22),
+    Track = Color3.fromRGB(33, 34, 38),
     White = Color3.fromRGB(255, 255, 255),
 }
+local function clamp(n, minValue, maxValue)
+    if n < minValue then
+        return minValue
+    end
+    if n > maxValue then
+        return maxValue
+    end
+    return n
+end
 local function parseAccentColor(v)
     if v == nil then
         return nil
@@ -150,15 +159,6 @@ local function tween(instance, properties, duration)
     local t = TweenService:Create(instance, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), properties)
     t:Play()
     return t
-end
-local function clamp(n, minValue, maxValue)
-    if n < minValue then
-        return minValue
-    end
-    if n > maxValue then
-        return maxValue
-    end
-    return n
 end
 local function applyCorner(instance, radius)
     local c = Instance.new("UICorner")
@@ -698,11 +698,20 @@ function Buster:CreateWindow(options)
     window._toggleKey = defaultToggleKey
     window._accentColor = accentColor or Theme.Accent
     window._controls = {}
-    local configFolder = "BusterConfigs/" .. tostring(game.PlaceId) .. "/"
+    -- Added flags table for flag-based config saving
+    window._flags = {}
+    
+    -- Create config folder with subfolder support
+    local configFolder = "BusterConfigs"
     if not isfolder(configFolder) then
-        makefolder(configFolder)
+        pcall(function() makefolder(configFolder) end)
     end
-    window._configFolder = configFolder
+    local placeFolder = configFolder .. "/" .. tostring(game.PlaceId)
+    if not isfolder(placeFolder) then
+        pcall(function() makefolder(placeFolder) end)
+    end
+    window._configFolder = placeFolder .. "/"
+    
     local function computeSidebarWidth(w)
         local isPhone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
         if isPhone then
@@ -835,7 +844,6 @@ function Buster:CreateWindow(options)
         label.TextColor3 = Theme.SubText
         label.TextSize = 12
         label.Font = Enum.Font.Gotham
-        label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = btn
         local tabContent = Instance.new("Frame")
         tabContent.Name = name .. "Content"
@@ -1019,9 +1027,19 @@ function Buster:CreateWindow(options)
                 createDivider(dWrap)
                 return dWrap
             end
+            
+            -- Fixed registerControl to use panel._window instead of self._window (self was undefined)
+            local function registerControl(controlData)
+                table.insert(panel._window._controls, controlData)
+                -- If flag is provided, register in flags table for easy access
+                if controlData.Flag and controlData.Flag ~= "" then
+                    panel._window._flags[controlData.Flag] = controlData.Element
+                end
+            end
+            
             function panel:CreateToggle(opt)
                 opt = opt or {}
-                local success = pcall(function()
+                local success, result = pcall(function()
                     local row = createRow(body, 26)
                     local hasIcon = opt.Icon ~= nil
                     local x = 0
@@ -1045,18 +1063,22 @@ function Buster:CreateWindow(options)
                     tWrap.Parent = row
                     local cb = opt.Callback or function() end
                     local toggle = createSquareToggle(tWrap, opt.Default or false, cb)
-                    table.insert(self._window._controls, {
-                        Tab = self._tab.Name,
-                        Panel = self._title,
+                    
+                    -- Fixed to use panel._tab instead of self._tab
+                    registerControl({
+                        Tab = panel._tab.Name,
+                        Panel = panel._title,
                         Name = opt.Name or "Toggle",
+                        Flag = opt.Flag,
                         Type = "Toggle",
                         Element = toggle
                     })
                     return toggle
                 end)
                 if not success then
-                    warn("Failed to create toggle:", opt.Name)
+                    warn("Failed to create toggle:", opt.Name, result)
                 end
+                return result
             end
             function panel:CreateLabel(opt)
                 if type(opt) == "string" then
@@ -1157,7 +1179,7 @@ function Buster:CreateWindow(options)
                 local function formatValue(v)
                     val.Text = tostring(v) .. "/" .. tostring(max) .. suffix
                 end
-                local function setValue(v)
+                local function setValue(v, skipCallback)
                     v = clamp(v, min, max)
                     v = math.floor((v - min) / step + 0.5) * step + min
                     current = v
@@ -1165,9 +1187,11 @@ function Buster:CreateWindow(options)
                     fill.Size = UDim2.new(pct, 0, 1, 0)
                     knob.Position = UDim2.new(pct, -6, 0.5, -6)
                     formatValue(v)
-                    pcall(cb, v)
+                    if not skipCallback then
+                        pcall(cb, v)
+                    end
                 end
-                setValue(default)
+                setValue(default, true)
                 local function updateFromX(x)
                     local rel = x - track.AbsolutePosition.X
                     local denom = track.AbsoluteSize.X
@@ -1218,15 +1242,19 @@ function Buster:CreateWindow(options)
                     end
                 end)
                 local slider = {
-                    SetValue = setValue,
+                    SetValue = function(_, v, skipCallback)
+                        setValue(v, skipCallback)
+                    end,
                     GetValue = function()
                         return current
                     end,
                 }
-                table.insert(self._window._controls, {
-                    Tab = self._tab.Name,
-                    Panel = self._title,
+                -- Register with flag support
+                registerControl({
+                    Tab = panel._tab.Name,
+                    Panel = panel._title,
                     Name = nameText,
+                    Flag = opt.Flag,
                     Type = "Slider",
                     Element = slider
                 })
@@ -1317,10 +1345,12 @@ function Buster:CreateWindow(options)
                         return current
                     end,
                 }
-                table.insert(self._window._controls, {
-                    Tab = self._tab.Name,
-                    Panel = self._title,
+                -- Register with flag support
+                registerControl({
+                    Tab = panel._tab.Name,
+                    Panel = panel._title,
                     Name = opt.Name or "Keybind",
+                    Flag = opt.Flag,
                     Type = "Keybind",
                     Element = keybind
                 })
@@ -1456,96 +1486,51 @@ function Buster:CreateWindow(options)
                     drop.Position = UDim2.fromOffset(absPos.X, y)
                     drop.Size = UDim2.fromOffset(absSize.X, drop.Size.Y.Offset)
                 end
+                local trackingConn
                 local function startTracking()
-                    task.spawn(function()
-                        while expanded and drop.Visible and drop.Parent do
-                            placeDrop(drop.Size.Y.Offset)
-                            task.wait(0.05)
+                    if trackingConn then
+                        trackingConn:Disconnect()
+                    end
+                    trackingConn = field:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+                        if expanded then
+                            placeDrop()
                         end
                     end)
                 end
                 local function rebuild(items)
-                    for _, ch in ipairs(drop:GetChildren()) do
-                        if ch:IsA("TextButton") or ch:IsA("Frame") then
-                            if not ch:IsA("UIListLayout") and not ch:IsA("UIPadding") then
-                                ch:Destroy()
-                            end
+                    for _, c in ipairs(drop:GetChildren()) do
+                        if c:IsA("TextButton") then
+                            c:Destroy()
                         end
                     end
                     for i, item in ipairs(items) do
-                        local optWrap = Instance.new("Frame")
-                        optWrap.Name = "OptionWrapper"
-                        optWrap.BackgroundColor3 = Theme.Card2
-                        optWrap.BackgroundTransparency = 1
-                        optWrap.BorderSizePixel = 0
-                        optWrap.Size = UDim2.new(1, 0, 0, 26)
-                        optWrap.LayoutOrder = i
-                        optWrap.Parent = drop
-                        optWrap.ZIndex = 10_015
-                        applyCorner(optWrap, 6)
-                        local optPad = Instance.new("UIPadding")
-                        optPad.PaddingLeft = UDim.new(0, 8)
-                        optPad.PaddingRight = UDim.new(0, 6)
-                        optPad.Parent = optWrap
-                        local it = Instance.new("TextButton")
-                        it.AutoButtonColor = false
-                        it.BorderSizePixel = 0
-                        it.BackgroundTransparency = 1
-                        it.Size = UDim2.new(1, 0, 1, 0)
-                        it.Position = UDim2.new(0, 0, 0, 0)
-                        it.Text = ""
-                        it.ZIndex = 10_020
-                        it.Parent = optWrap
-                        local itemLabel = Instance.new("TextLabel")
-                        itemLabel.BackgroundTransparency = 1
-                        itemLabel.Size = UDim2.new(1, -18, 1, 0)
-                        itemLabel.Position = UDim2.new(0, 0, 0, 0)
-                        itemLabel.Text = tostring(item)
-                        itemLabel.TextColor3 = (tostring(item) == tostring(current)) and Theme.Text or Theme.SubText
-                        itemLabel.TextSize = 11
-                        itemLabel.Font = Enum.Font.Gotham
-                        itemLabel.TextXAlignment = Enum.TextXAlignment.Left
-                        itemLabel.ZIndex = 10_018
-                        itemLabel.Parent = optWrap
-                        local isActive = tostring(item) == tostring(current)
-                        local function activate()
-                            isActive = true
-                            tween(optWrap, { BackgroundTransparency = 0.5 }, 0.12)
-                            tween(itemLabel, { TextColor3 = Theme.Text }, 0.12)
-                            tween(optPad, { PaddingLeft = UDim.new(0, 12) }, 0.12)
-                        end
-                        local function deactivate()
-                            isActive = false
-                            tween(optWrap, { BackgroundTransparency = 1 }, 0.12)
-                            tween(itemLabel, { TextColor3 = Theme.SubText }, 0.12)
-                            tween(optPad, { PaddingLeft = UDim.new(0, 8) }, 0.12)
-                        end
-                        if isActive then
-                            optWrap.BackgroundTransparency = 0.5
-                            itemLabel.TextColor3 = Theme.Text
-                            optPad.PaddingLeft = UDim.new(0, 12)
-                        end
-                        it.MouseEnter:Connect(function()
-                            if not isActive then
-                                tween(optWrap, { BackgroundTransparency = 0.8 }, 0.12)
-                                tween(itemLabel, { TextColor3 = Theme.Text }, 0.12)
-                                tween(optPad, { PaddingLeft = UDim.new(0, 12) }, 0.12)
-                            end
+                        local opt = Instance.new("TextButton")
+                        opt.AutoButtonColor = false
+                        opt.BackgroundColor3 = Theme.Card2
+                        opt.BackgroundTransparency = 0.5
+                        opt.BorderSizePixel = 0
+                        opt.Size = UDim2.new(1, 0, 0, 24)
+                        opt.Text = truncateWithStars(tostring(item), 28)
+                        opt.TextColor3 = (item == current) and Theme.Accent or Theme.Text
+                        opt.TextSize = 11
+                        opt.Font = Enum.Font.Gotham
+                        opt.LayoutOrder = i
+                        opt.Parent = drop
+                        applyCorner(opt, 5)
+                        opt.MouseEnter:Connect(function()
+                            tween(opt, { BackgroundTransparency = 0 }, 0.1)
                         end)
-                        it.MouseLeave:Connect(function()
-                            if not isActive then
-                                tween(optWrap, { BackgroundTransparency = 1 }, 0.12)
-                                tween(itemLabel, { TextColor3 = Theme.SubText }, 0.12)
-                                tween(optPad, { PaddingLeft = UDim.new(0, 8) }, 0.12)
-                            end
+                        opt.MouseLeave:Connect(function()
+                            tween(opt, { BackgroundTransparency = 0.5 }, 0.1)
                         end)
-                        it.MouseButton1Click:Connect(function()
+                        opt.MouseButton1Click:Connect(function()
                             current = item
-                            valueLabel.Text = truncateWithStars(tostring(current), 26)
+                            valueLabel.Text = truncateWithStars(tostring(item), 26)
                             expanded = false
-                            tween(arrowUp, { TextColor3 = Theme.SubText }, 0.08)
-                            tween(arrowDown, { TextColor3 = Theme.SubText }, 0.08)
+                            tween(arrowUp, { TextColor3 = Theme.SubText }, 0.12)
+                            tween(arrowDown, { TextColor3 = Theme.SubText }, 0.12)
                             catcher.Visible = false
+                            drop.ScrollBarImageTransparency = 1
                             tween(drop, { Size = UDim2.fromOffset(field.AbsoluteSize.X, 0) }, 0.14)
                             task.wait(0.14)
                             if drop and drop.Parent then
@@ -1658,10 +1643,12 @@ function Buster:CreateWindow(options)
                         autoRefresh()
                     end,
                 }
-                table.insert(self._window._controls, {
-                    Tab = self._tab.Name,
-                    Panel = self._title,
+                -- Register with flag support
+                registerControl({
+                    Tab = panel._tab.Name,
+                    Panel = panel._title,
                     Name = opt.Name or "Dropdown",
+                    Flag = opt.Flag,
                     Type = "Dropdown",
                     Element = dropdown
                 })
@@ -1705,10 +1692,12 @@ function Buster:CreateWindow(options)
                         return textbox.Text
                     end,
                 }
-                table.insert(self._window._controls, {
-                    Tab = self._tab.Name,
-                    Panel = self._title,
+                -- Register with flag support
+                registerControl({
+                    Tab = panel._tab.Name,
+                    Panel = panel._title,
                     Name = nameText,
+                    Flag = opt.Flag,
                     Type = "Textbox",
                     Element = textBox
                 })
@@ -1747,139 +1736,221 @@ function Buster:CreateWindow(options)
         opt = opt or {}
         local nTitle = opt.Title or titleText
         local nText = opt.Text or ""
-        local duration = opt.Duration or 2.5
-        local toast = Instance.new("Frame")
-        toast.BackgroundColor3 = Theme.Card
-        toast.BorderSizePixel = 0
-        toast.Size = UDim2.new(1, 0, 0, 56)
-        toast.ZIndex = 10_110
-        toast.Parent = notifyHost
-        applyCorner(toast, 10)
-        applyStroke(toast, Theme.StrokeSoft, 0.55)
-        local pad = Instance.new("UIPadding")
-        pad.PaddingTop = UDim.new(0, 8)
-        pad.PaddingBottom = UDim.new(0, 8)
-        pad.PaddingLeft = UDim.new(0, 10)
-        pad.PaddingRight = UDim.new(0, 10)
-        pad.Parent = toast
-        local t1 = createText(toast, tostring(nTitle), 12, true, Theme.Text)
-        t1.Size = UDim2.new(1, 0, 0, 18)
-        t1.ZIndex = 10_120
-        local t2 = createText(toast, tostring(nText), 11, false, Theme.SubText)
-        t2.Size = UDim2.new(1, 0, 0, 16)
-        t2.Position = UDim2.new(0, 0, 0, 20)
-        t2.ZIndex = 10_120
-        toast.BackgroundTransparency = 1
-        tween(toast, { BackgroundTransparency = 0 }, 0.14)
-        task.delay(duration, function()
-            if toast and toast.Parent then
-                tween(toast, { BackgroundTransparency = 1 }, 0.14)
-                task.wait(0.16)
-                if toast and toast.Parent then
-                    toast:Destroy()
-                end
+        local dur = opt.Duration or 3
+        local card = Instance.new("Frame")
+        card.BackgroundColor3 = Theme.Card
+        card.BorderSizePixel = 0
+        card.Size = UDim2.new(0, 300, 0, 70)
+        card.Position = UDim2.new(0, 300, 0, 0)
+        card.ClipsDescendants = true
+        card.Parent = notifyHost
+        applyCorner(card, 10)
+        applyStroke(card, Theme.StrokeSoft, 0.55)
+        local nPad = Instance.new("UIPadding")
+        nPad.PaddingTop = UDim.new(0, 10)
+        nPad.PaddingLeft = UDim.new(0, 14)
+        nPad.PaddingRight = UDim.new(0, 14)
+        nPad.PaddingBottom = UDim.new(0, 10)
+        nPad.Parent = card
+        local nTitleLabel = createText(card, nTitle, 13, true, Theme.Text)
+        nTitleLabel.Size = UDim2.new(1, 0, 0, 18)
+        local nTextLabel = createText(card, nText, 11, false, Theme.SubText)
+        nTextLabel.Position = UDim2.new(0, 0, 0, 22)
+        nTextLabel.Size = UDim2.new(1, 0, 0, 32)
+        nTextLabel.TextWrapped = true
+        nTextLabel.TextYAlignment = Enum.TextYAlignment.Top
+        tween(card, { Position = UDim2.new(0, 0, 0, 0) }, 0.22)
+        task.delay(dur, function()
+            tween(card, { Position = UDim2.new(0, 320, 0, 0) }, 0.22)
+            task.wait(0.24)
+            if card and card.Parent then
+                card:Destroy()
             end
         end)
     end
-    function window:Toggle()
-        if not main.Visible then
-            main.Visible = true
-            if minimized then
-                minimized = false
-            end
-            local w = main.Size.X.Offset
-            local h = main.Size.Y.Offset
-            main.Position = UDim2.new(0.5, -w / 2, 0.5, -h / 2)
-        else
-            main.Visible = false
+    local uiVisible = true
+    UserInputService.InputBegan:Connect(function(input)
+        if window._keybindListening then
+            return
         end
-    end
-    function window:SetTitle(text)
-        window._titleLabel.Text = tostring(text)
-    end
-    function window:SetFooter(text)
-        window._subtitleLabel.Text = "| " .. tostring(text)
-    end
-    function window:SetBrandText(text)
-        window._brandTextLabel.Text = tostring(text)
-        window._brandTextLabel.Visible = true
-        window._brandImageLabel.Visible = false
-        outsideText.Text = tostring(text)
-        outsideText.Visible = true
-        outsideImg.Visible = false
-    end
-    function window:SetBrandImage(image)
-        window._brandImageLabel.Image = tostring(image or "")
-        window._brandImageLabel.Visible = window._brandImageLabel.Image ~= ""
-        window._brandTextLabel.Visible = not window._brandImageLabel.Visible
-        outsideImg.Image = tostring(image or "")
-        outsideImg.Visible = outsideImg.Image ~= ""
-        outsideText.Visible = not outsideImg.Visible
-    end
+        if window._toggleKey and input.KeyCode == window._toggleKey then
+            uiVisible = not uiVisible
+            main.Visible = uiVisible
+        end
+    end)
+    outsideToggle.MouseButton1Click:Connect(function()
+        uiVisible = not uiVisible
+        main.Visible = uiVisible
+        if isMobileToggle then
+            outsideText.Text = uiVisible and "Close" or "Open"
+        end
+    end)
     function window:Destroy()
         screen:Destroy()
     end
     function window:SetToggleKey(key)
         window._toggleKey = key
     end
+    
+    -- Fixed SaveConfig to use flags for unique identification
     function window:SaveConfig(configName)
-    local data = {}
-    for _, control in ipairs(window._controls) do
-        if control.Tab ~= "Settings" then
-            local key = control.Tab .. "." .. control.Panel .. "." .. control.Name
-            local val = control.Element:GetValue()
-            if typeof(val) == "EnumItem" then
-                val = val.EnumType.Name .. "." .. val.Name
+        local data = {}
+        for _, control in ipairs(window._controls) do
+            -- Skip Settings tab and controls without flags
+            if control.Tab ~= "Settings" then
+                local key
+                -- Use flag if available, otherwise use path-based key
+                if control.Flag and control.Flag ~= "" then
+                    key = control.Flag
+                else
+                    key = control.Tab .. "." .. control.Panel .. "." .. control.Name
+                end
+                
+                local val = nil
+                local success = pcall(function()
+                    val = control.Element:GetValue()
+                end)
+                
+                if success and val ~= nil then
+                    -- Handle enum values
+                    if typeof(val) == "EnumItem" then
+                        val = { _enum = true, type = tostring(val.EnumType), name = val.Name }
+                    end
+                    data[key] = val
+                end
             end
-            data[key] = val
+        end
+        
+        local success, json = pcall(function()
+            return HttpService:JSONEncode(data)
+        end)
+        
+        if success then
+            local writeSuccess = pcall(function()
+                writefile(window._configFolder .. configName .. ".json", json)
+            end)
+            if writeSuccess then
+                window:Notify({ Title = "Configs", Text = "Saved config: " .. configName, Duration = 2 })
+            else
+                window:Notify({ Title = "Configs", Text = "Failed to write config file", Duration = 2 })
+            end
+        else
+            window:Notify({ Title = "Configs", Text = "Failed to encode config", Duration = 2 })
         end
     end
-    local json = HttpService:JSONEncode(data)
-    writefile(window._configFolder .. configName .. ".json", json)
-    window:Notify({ Title = "Configs", Text = "Saved config: " .. configName, Duration = 2 })
-end
+    
+    -- Fixed LoadConfig to use flags and properly restore values
     function window:LoadConfig(configName)
         local file = window._configFolder .. configName .. ".json"
-        if not isfile(file) then
+        
+        local fileExists = false
+        pcall(function()
+            fileExists = isfile(file)
+        end)
+        
+        if not fileExists then
             window:Notify({ Title = "Configs", Text = "Config not found: " .. configName, Duration = 2 })
             return
         end
-        local json = readfile(file)
-        local data = HttpService:JSONDecode(json)
+        
+        local json
+        local readSuccess = pcall(function()
+            json = readfile(file)
+        end)
+        
+        if not readSuccess or not json then
+            window:Notify({ Title = "Configs", Text = "Failed to read config file", Duration = 2 })
+            return
+        end
+        
+        local data
+        local decodeSuccess = pcall(function()
+            data = HttpService:JSONDecode(json)
+        end)
+        
+        if not decodeSuccess or not data then
+            window:Notify({ Title = "Configs", Text = "Failed to decode config", Duration = 2 })
+            return
+        end
+        
+        local loadedCount = 0
         for _, control in ipairs(window._controls) do
-            local key = control.Tab .. "." .. control.Panel .. "." .. control.Name
+            local key
+            if control.Flag and control.Flag ~= "" then
+                key = control.Flag
+            else
+                key = control.Tab .. "." .. control.Panel .. "." .. control.Name
+            end
+            
             local val = data[key]
-            if val then
-                if type(val) == "string" and string.find(val, "%.") then
-                    local enumType, enumName = val:match("^(.-)%.(.-)$")
-                    if Enum[enumType] and Enum[enumType][enumName] then
-                        val = Enum[enumType][enumName]
+            if val ~= nil then
+                pcall(function()
+                    -- Handle enum values
+                    if type(val) == "table" and val._enum then
+                        local enumType = Enum[val.type]
+                        if enumType and enumType[val.name] then
+                            val = enumType[val.name]
+                        else
+                            return -- Skip if enum not found
+                        end
                     end
-                end
-                control.Element:SetValue(val)
+                    control.Element:SetValue(val)
+                    loadedCount = loadedCount + 1
+                end)
             end
         end
-        window:Notify({ Title = "Configs", Text = "Loaded config: " .. configName, Duration = 2 })
+        
+        window:Notify({ Title = "Configs", Text = "Loaded config: " .. configName .. " (" .. loadedCount .. " values)", Duration = 2 })
     end
+    
     function window:DeleteConfig(configName)
         local file = window._configFolder .. configName .. ".json"
-        if isfile(file) then
-            delfile(file)
+        local fileExists = false
+        pcall(function()
+            fileExists = isfile(file)
+        end)
+        
+        if fileExists then
+            pcall(function()
+                delfile(file)
+            end)
             window:Notify({ Title = "Configs", Text = "Deleted config: " .. configName, Duration = 2 })
         else
             window:Notify({ Title = "Configs", Text = "Config not found: " .. configName, Duration = 2 })
         end
     end
+    
     function window:GetConfigs()
         local configs = {}
-        for _, file in ipairs(listfiles(window._configFolder)) do
-            local name = file:match("^.+/(.-)%.json$")
-            if name then
-                table.insert(configs, name)
+        pcall(function()
+            for _, file in ipairs(listfiles(window._configFolder)) do
+                local name = file:match("([^/\\]+)%.json$")
+                if name then
+                    table.insert(configs, name)
+                end
             end
-        end
+        end)
         return configs
     end
+    
+    -- Add helper to get/set values by flag
+    function window:GetFlag(flag)
+        local element = window._flags[flag]
+        if element and element.GetValue then
+            return element:GetValue()
+        end
+        return nil
+    end
+    
+    function window:SetFlag(flag, value)
+        local element = window._flags[flag]
+        if element and element.SetValue then
+            element:SetValue(value)
+            return true
+        end
+        return false
+    end
+    
     do
         local settingsTab = window:CreateTab("Settings")
         settingsTab._button.LayoutOrder = 99999
@@ -1902,13 +1973,41 @@ end
             Name = "Config Name",
             Default = "default",
         })
+        
+        -- Add config dropdown to select existing configs
+        local configDropdown = configPanel:CreateDropdown({
+            Name = "Select Config",
+            Label = "Available Configs",
+            List = window:GetConfigs(),
+            Callback = function(selected)
+                configNameBox:SetValue(selected)
+            end
+        })
+        
+        -- Add refresh button for config list
+        configPanel:CreateButton({
+            Name = "Refresh Config List",
+            Callback = function()
+                configDropdown:UpdateList(window:GetConfigs())
+                window:Notify({ Title = "Configs", Text = "Config list refreshed", Duration = 1.5 })
+            end
+        })
+        
         configPanel:CreateButton({
             Name = "Create Config",
             Callback = function()
                 local name = configNameBox:GetValue()
                 if name ~= "" then
-                    if not isfile(window._configFolder .. name .. ".json") then
-                        writefile(window._configFolder .. name .. ".json", "{}")
+                    local fileExists = false
+                    pcall(function()
+                        fileExists = isfile(window._configFolder .. name .. ".json")
+                    end)
+                    
+                    if not fileExists then
+                        pcall(function()
+                            writefile(window._configFolder .. name .. ".json", "{}")
+                        end)
+                        configDropdown:UpdateList(window:GetConfigs())
                         window:Notify({ Title = "Configs", Text = "Created config: " .. name, Duration = 2 })
                     else
                         window:Notify({ Title = "Configs", Text = "Config exists: " .. name, Duration = 2 })
@@ -1922,6 +2021,7 @@ end
                 local name = configNameBox:GetValue()
                 if name ~= "" then
                     window:SaveConfig(name)
+                    configDropdown:UpdateList(window:GetConfigs())
                 end
             end
         })
@@ -1940,634 +2040,12 @@ end
                 local name = configNameBox:GetValue()
                 if name ~= "" then
                     window:DeleteConfig(name)
+                    configDropdown:UpdateList(window:GetConfigs())
                 end
             end
         })
     end
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then
-            return
-        end
-        if window._keybindListening then
-            return
-        end
-        local key = window._toggleKey
-        if not key then
-            return
-        end
-        if typeof(key) == "EnumItem" and key.EnumType == Enum.KeyCode then
-            if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == key then
-                window:Toggle()
-            end
-            return
-        end
-        if typeof(key) == "EnumItem" and key.EnumType == Enum.UserInputType then
-            if input.UserInputType == key then
-                window:Toggle()
-            end
-        end
-    end)
-    outsideToggle.MouseButton1Click:Connect(function()
-        window:Toggle()
-        if isMobileToggle and outsideText and outsideText.Parent then
-            outsideText.Text = main.Visible and "Close" or "Open"
-        end
-    end)
     return window
-end
-function Buster:CreateHomeTab(window, options)
-    options = options or {}
-    local tabName = options.Name or "Home"
-    local tabIcon = options.Icon
-    local homeTab = window:CreateTab({ Name = tabName, Icon = tabIcon })
-    local RunService = game:GetService("RunService")
-    local StatsService = game:GetService("Stats")
-    local MarketplaceService = game:GetService("MarketplaceService")
-    local LocalizationService = game:GetService("LocalizationService")
-    local discordInvite = options.DiscordInvite or ""
-    local supportedExecutors = options.SupportedExecutors or {}
-    local unsupportedExecutors = options.UnsupportedExecutors or {}
-    local changelog = options.Changelog or {}
-    local content = homeTab._content
-    local leftCol = content and content:FindFirstChild("Left")
-    local rightCol = content and content:FindFirstChild("Right")
-    if not content or not leftCol or not rightCol then
-        return homeTab
-    end
-    for _, child in ipairs(content:GetChildren()) do
-        if string.sub(child.Name, 1, 4) == "Home" then
-            child:Destroy()
-        end
-    end
-    for _, sf in ipairs({ leftCol, rightCol }) do
-        for _, child in ipairs(sf:GetChildren()) do
-            if string.sub(child.Name, 1, 4) == "Home" then
-                child:Destroy()
-            end
-        end
-    end
-    local function safeDestroyConnection(conn)
-        if conn and typeof(conn) == "RBXScriptConnection" then
-            pcall(function()
-                conn:Disconnect()
-            end)
-        end
-    end
-    local destroyed = false
-    local connections = {}
-    content.AncestryChanged:Connect(function(_, parent)
-        if parent == nil and not destroyed then
-            destroyed = true
-            for _, conn in ipairs(connections) do
-                safeDestroyConnection(conn)
-            end
-        end
-    end)
-    local function createCard(parent, titleText, subtitleText, iconImage, fixedHeight)
-        local cardInset = 6
-        local card = Instance.new("Frame")
-        card.Name = "HomeCard"
-        card.BackgroundColor3 = Theme.Card
-        card.BorderSizePixel = 0
-        card.Size = UDim2.new(1, -(cardInset * 2), 0, fixedHeight or 96)
-        card.Position = UDim2.new(0, cardInset, 0, 0)
-        card.Parent = parent
-        applyCorner(card, 10)
-        applyStroke(card, Theme.StrokeSoft, 0.55)
-        local cardPad = Instance.new("UIPadding")
-        cardPad.Name = "HomePad"
-        cardPad.PaddingTop = UDim.new(0, 10)
-        cardPad.PaddingLeft = UDim.new(0, 10)
-        cardPad.PaddingRight = UDim.new(0, 10)
-        cardPad.PaddingBottom = UDim.new(0, 10)
-        cardPad.Parent = card
-        local headerRow = Instance.new("Frame")
-        headerRow.Name = "HomeHeader"
-        headerRow.BackgroundTransparency = 1
-        headerRow.BorderSizePixel = 0
-        headerRow.Size = UDim2.new(1, 0, 0, 22)
-        headerRow.Parent = card
-        local icon = Instance.new("ImageLabel")
-        icon.Name = "HomeIcon"
-        icon.BackgroundTransparency = 1
-        icon.BorderSizePixel = 0
-        icon.Size = UDim2.new(0, 16, 0, 16)
-        icon.Position = UDim2.new(0, 0, 0.5, -8)
-        icon.Image = iconImage or ""
-        icon.ImageColor3 = Theme.Text
-        icon.Visible = icon.Image ~= ""
-        icon.Parent = headerRow
-        local title = createText(headerRow, titleText or "", 13, true, Theme.Text)
-        title.Name = "HomeTitle"
-        title.Size = UDim2.new(1, -22, 1, 0)
-        title.Position = UDim2.new(0, icon.Visible and 22 or 0, 0, 0)
-        title.TextXAlignment = Enum.TextXAlignment.Left
-        local subtitle = nil
-        if subtitleText and subtitleText ~= "" then
-            subtitle = createText(card, subtitleText, 11, false, Theme.SubText)
-            subtitle.Name = "HomeSubtitle"
-            subtitle.Size = UDim2.new(1, 0, 0, 16)
-            subtitle.Position = UDim2.new(0, 0, 0, 26)
-            subtitle.TextXAlignment = Enum.TextXAlignment.Left
-        end
-        local body = Instance.new("Frame")
-        body.Name = "HomeBody"
-        body.BackgroundTransparency = 1
-        body.BorderSizePixel = 0
-        body.Position = UDim2.new(0, 0, 0, subtitle and 46 or 28)
-        body.Size = UDim2.new(1, 0, 1, -(subtitle and 46 or 28))
-        body.Parent = card
-        return card, body
-    end
-    local welcomeHeight = 110
-    local topGap = 12
-    local topOffset = welcomeHeight + topGap
-    local welcome = Instance.new("Frame")
-    welcome.Name = "HomeWelcome"
-    welcome.BackgroundColor3 = Theme.Card
-    welcome.BorderSizePixel = 0
-    welcome.Size = UDim2.new(1, 0, 0, welcomeHeight)
-    welcome.Position = UDim2.new(0, 0, 0, 0)
-    welcome.Parent = content
-    applyCorner(welcome, 12)
-    applyStroke(welcome, Theme.Accent, 0.75)
-    local backdrop = Instance.new("ImageLabel")
-    backdrop.Name = "HomeBackdrop"
-    backdrop.BackgroundTransparency = 1
-    backdrop.BorderSizePixel = 0
-    backdrop.Size = UDim2.new(1, 0, 1, 0)
-    backdrop.ScaleType = Enum.ScaleType.Crop
-    backdrop.ImageTransparency = 0.7
-    backdrop.Image = ""
-    backdrop.ZIndex = 1
-    backdrop.Parent = welcome
-    applyCorner(backdrop, 12)
-    if options.Backdrop ~= nil then
-        if options.Backdrop == 0 then
-            backdrop.Image = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. game.PlaceId .. "&width=768&height=432&format=png"
-        else
-            backdrop.Image = "rbxassetid://" .. tostring(options.Backdrop)
-        end
-    end
-    local backdropFade = Instance.new("Frame")
-    backdropFade.Name = "HomeBackdropFade"
-    backdropFade.BackgroundColor3 = Theme.Card
-    backdropFade.BorderSizePixel = 0
-    backdropFade.BackgroundTransparency = 0.06
-    backdropFade.Size = UDim2.new(1, 0, 1, 0)
-    backdropFade.ZIndex = 2
-    backdropFade.Parent = welcome
-    applyCorner(backdropFade, 12)
-    local welcomePad = Instance.new("UIPadding")
-    welcomePad.Name = "HomeWelcomePad"
-    welcomePad.PaddingTop = UDim.new(0, 12)
-    welcomePad.PaddingLeft = UDim.new(0, 12)
-    welcomePad.PaddingRight = UDim.new(0, 12)
-    welcomePad.PaddingBottom = UDim.new(0, 12)
-    welcomePad.Parent = welcome
-    local welcomeContent = Instance.new("Frame")
-    welcomeContent.Name = "HomeWelcomeContent"
-    welcomeContent.BackgroundTransparency = 1
-    welcomeContent.BorderSizePixel = 0
-    welcomeContent.Size = UDim2.new(1, 0, 1, 0)
-    welcomeContent.ZIndex = 3
-    welcomeContent.Parent = welcome
-    local avatarWrap = Instance.new("Frame")
-    avatarWrap.Name = "HomeAvatarWrap"
-    avatarWrap.BackgroundColor3 = Theme.Card2
-    avatarWrap.BorderSizePixel = 0
-    avatarWrap.Size = UDim2.new(0, 54, 0, 54)
-    avatarWrap.Position = UDim2.new(0, 0, 0.5, -27)
-    avatarWrap.ZIndex = 4
-    avatarWrap.Parent = welcomeContent
-    applyCorner(avatarWrap, 27)
-    applyStroke(avatarWrap, Theme.StrokeSoft, 0.65)
-    local avatarImg = Instance.new("ImageLabel")
-    avatarImg.Name = "HomeAvatar"
-    avatarImg.BackgroundTransparency = 1
-    avatarImg.BorderSizePixel = 0
-    avatarImg.Size = UDim2.new(1, 0, 1, 0)
-    avatarImg.ScaleType = Enum.ScaleType.Crop
-    avatarImg.ZIndex = 5
-    avatarImg.Parent = avatarWrap
-    applyCorner(avatarImg, 27)
-    task.spawn(function()
-        pcall(function()
-            local lp = Players.LocalPlayer
-            if not (lp and lp.UserId) then
-                return
-            end
-            local thumb = Players:GetUserThumbnailAsync(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-            if avatarImg and avatarImg.Parent then
-                avatarImg.Image = thumb
-            end
-        end)
-    end)
-    local welcomeTitle = createText(welcomeContent, "Welcome, " .. tostring((Players.LocalPlayer and Players.LocalPlayer.DisplayName) or "User"), 18, true, Theme.Text)
-    welcomeTitle.Name = "HomeWelcomeTitle"
-    welcomeTitle.Position = UDim2.new(0, 66, 0, 18)
-    welcomeTitle.Size = UDim2.new(1, -220, 0, 22)
-    welcomeTitle.ZIndex = 5
-    local welcomeSub = createText(welcomeContent, "", 12, false, Theme.Text)
-    welcomeSub.Name = "HomeWelcomeSub"
-    welcomeSub.Position = UDim2.new(0, 66, 0, 42)
-    welcomeSub.Size = UDim2.new(1, -220, 0, 18)
-    welcomeSub.ZIndex = 5
-    welcomeSub.TextTransparency = 0.25
-    local timeLabel = createText(welcomeContent, "", 12, false, Theme.Text)
-    timeLabel.Name = "HomeTime"
-    timeLabel.TextXAlignment = Enum.TextXAlignment.Right
-    timeLabel.Position = UDim2.new(1, -8, 0, 20)
-    timeLabel.Size = UDim2.new(0, 200, 0, 18)
-    timeLabel.ZIndex = 5
-    timeLabel.TextTransparency = 0.25
-    local dateLabel = createText(welcomeContent, "", 12, false, Theme.Text)
-    dateLabel.Name = "HomeDate"
-    dateLabel.TextXAlignment = Enum.TextXAlignment.Right
-    dateLabel.Position = UDim2.new(1, -8, 0, 42)
-    dateLabel.Size = UDim2.new(0, 200, 0, 18)
-    dateLabel.ZIndex = 5
-    dateLabel.TextTransparency = 0.25
-    local function getGreetingString(hour)
-        if hour >= 4 and hour < 12 then
-            return "Good Morning!"
-        end
-        if hour >= 12 and hour < 19 then
-            return "How's Your Day Going?"
-        end
-        if hour >= 19 and hour <= 23 then
-            return "Sweet Dreams."
-        end
-        return "Jeez you should be asleep..."
-    end
-    task.spawn(function()
-        while not destroyed and welcome and welcome.Parent do
-            local t = os.date("*t")
-            local formattedTime = string.format("%02d : %02d : %02d", t.hour, t.min, t.sec)
-            timeLabel.Text = formattedTime
-            dateLabel.Text = string.format("%02d / %02d / %02d", t.day, t.month, t.year % 100)
-            local lp = Players.LocalPlayer
-            local lpName = (lp and lp.Name) or "User"
-            welcomeSub.Text = getGreetingString(t.hour) .. " | " .. tostring(lpName)
-            task.wait(1)
-        end
-    end)
-    local function applyHomeColumns(w)
-        local h = content.AbsoluteSize.Y
-        local remaining = math.max(0, h - topOffset)
-        if w < 720 then
-            local leftH = math.max(0, math.floor(remaining * 0.52 - 6))
-            local rightH = math.max(0, remaining - leftH - 12)
-            leftCol.Size = UDim2.new(1, 0, 0, leftH)
-            leftCol.Position = UDim2.new(0, 0, 0, topOffset)
-            rightCol.Size = UDim2.new(1, 0, 0, rightH)
-            rightCol.Position = UDim2.new(0, 0, 0, topOffset + leftH + 12)
-        else
-            leftCol.Size = UDim2.new(0.58, -8, 1, -topOffset)
-            leftCol.Position = UDim2.new(0, 0, 0, topOffset)
-            rightCol.Size = UDim2.new(0.42, -8, 1, -topOffset)
-            rightCol.Position = UDim2.new(0.58, 16, 0, topOffset)
-        end
-    end
-    homeTab._applyColumns = applyHomeColumns
-    applyHomeColumns(window._main.Size.X.Offset)
-    table.insert(connections, content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        applyHomeColumns(window._main.Size.X.Offset)
-    end))
-    do
-        local discordCard = createCard(leftCol, "Discord", "Tap to join the discord of\nyour script.", options.DiscordIcon, 88)
-        local discordInteract = Instance.new("TextButton")
-        discordInteract.Name = "HomeDiscordInteract"
-        discordInteract.AutoButtonColor = false
-        discordInteract.BackgroundTransparency = 1
-        discordInteract.BorderSizePixel = 0
-        discordInteract.Text = ""
-        discordInteract.Size = UDim2.new(1, 0, 1, 0)
-        discordInteract.Position = UDim2.new(0, 0, 0, 0)
-        discordInteract.Parent = discordCard
-        discordInteract.MouseEnter:Connect(function()
-            tween(discordCard, { BackgroundColor3 = Theme.Card2 }, 0.12)
-        end)
-        discordInteract.MouseLeave:Connect(function()
-            tween(discordCard, { BackgroundColor3 = Theme.Card }, 0.12)
-        end)
-        discordInteract.MouseButton1Click:Connect(function()
-            if discordInvite == "" then
-                window:Notify({ Title = "Discord", Text = "No invite set", Duration = 2 })
-                return
-            end
-            pcall(function()
-                setclipboard("https://discord.gg/" .. tostring(discordInvite))
-            end)
-            window:Notify({ Title = "Discord", Text = "Invite copied", Duration = 2 })
-        end)
-        local gameName = "Unknown"
-        pcall(function()
-            gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
-        end)
-        local serverCard, serverBody = createCard(
-            leftCol,
-            "Server",
-            "Currently Playing " .. truncateWithStars(gameName, 26) .. "...",
-            options.ServerIcon,
-            250
-        )
-        local grid = Instance.new("Frame")
-        grid.Name = "HomeServerGrid"
-        grid.BackgroundTransparency = 1
-        grid.BorderSizePixel = 0
-        grid.Size = UDim2.new(1, 0, 1, 0)
-        grid.Parent = serverBody
-        local gridLayout = Instance.new("UIGridLayout")
-        gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
-        gridLayout.CellSize = UDim2.new(0.5, -5, 0, 56)
-        gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        gridLayout.Parent = grid
-        local function statTile(titleText)
-            local tile = Instance.new("Frame")
-            tile.Name = "HomeStatTile"
-            tile.BackgroundColor3 = Theme.Card2
-            tile.BorderSizePixel = 0
-            tile.Parent = grid
-            applyCorner(tile, 10)
-            applyStroke(tile, Theme.StrokeSoft, 0.7)
-            local p = Instance.new("UIPadding")
-            p.Name = "HomeStatPad"
-            p.PaddingTop = UDim.new(0, 8)
-            p.PaddingLeft = UDim.new(0, 10)
-            p.PaddingRight = UDim.new(0, 10)
-            p.PaddingBottom = UDim.new(0, 8)
-            p.Parent = tile
-            local title = createText(tile, titleText, 11, true, Theme.Text)
-            title.Size = UDim2.new(1, 0, 0, 16)
-            local value = createText(tile, "", 11, false, Theme.SubText)
-            value.Position = UDim2.new(0, 0, 0, 18)
-            value.Size = UDim2.new(1, 0, 0, 30)
-            value.TextWrapped = true
-            value.TextYAlignment = Enum.TextYAlignment.Top
-            return tile, value
-        end
-        local tilePlayers, valPlayers = statTile("Players")
-        local tileCapacity, valCapacity = statTile("Capacity")
-        local tileLatency, valLatency = statTile("Latency")
-        local tileJoin, valJoin = statTile("Join Script")
-        local tileTime, valTime = statTile("Time")
-        local tileRegion, valRegion = statTile("Region")
-
-        valJoin.Text = "Click to copy"
-        local joinInteract = Instance.new("TextButton")
-        joinInteract.Name = "HomeJoinInteract"
-        joinInteract.AutoButtonColor = false
-        joinInteract.BackgroundTransparency = 1
-        joinInteract.BorderSizePixel = 0
-        joinInteract.Text = ""
-        joinInteract.Size = UDim2.new(1, 0, 1, 0)
-        joinInteract.Parent = tileJoin
-        joinInteract.MouseButton1Click:Connect(function()
-            local scriptText = string.format(
-                'game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game:GetService("Players").LocalPlayer)',
-                game.PlaceId,
-                tostring(game.JobId)
-            )
-            pcall(function()
-                setclipboard(scriptText)
-            end)
-            window:Notify({ Title = "Server", Text = "Join script copied", Duration = 2 })
-        end)
-
-        local function updateCounts()
-            valPlayers.Text = tostring(#Players:GetPlayers()) .. " Players\nIn This Server"
-            valCapacity.Text = tostring(Players.MaxPlayers) .. " Players\nCan Join"
-        end
-        updateCounts()
-        table.insert(connections, Players.PlayerAdded:Connect(updateCounts))
-        table.insert(connections, Players.PlayerRemoving:Connect(updateCounts))
-
-        task.spawn(function()
-            pcall(function()
-                local region = LocalizationService:GetCountryRegionForPlayerAsync(LocalPlayer)
-                if valRegion and valRegion.Parent then
-                    valRegion.Text = tostring(region)
-                end
-            end)
-        end)
-
-        local startTick = tick()
-
-        local function formatElapsed(sec)
-            sec = math.max(0, math.floor(sec))
-            if sec < 60 then
-                return tostring(sec) .. "s"
-            end
-            if sec < 3600 then
-                return tostring(math.floor(sec / 60)) .. "m"
-            end
-            return tostring(math.floor(sec / 3600)) .. "h"
-        end
-
-        local fpsCounter = 0
-        local lastFpsUpdate = tick()
-
-        local function getPingMs()
-            local ping = nil
-            pcall(function()
-                ping = StatsService.PerformanceStats.Ping:GetValue()
-            end)
-            if typeof(ping) == "number" then
-                return math.round(ping)
-            end
-
-            local netPing = nil
-            pcall(function()
-                netPing = LocalPlayer:GetNetworkPing()
-            end)
-            if typeof(netPing) == "number" then
-                return math.round(netPing * 1000)
-            end
-            return 0
-        end
-
-        table.insert(
-            connections,
-            RunService.Heartbeat:Connect(function()
-                if destroyed then
-                    return
-                end
-                fpsCounter += 1
-                local now = tick()
-                if now - lastFpsUpdate >= 1 then
-                    local pingMs = getPingMs()
-                    valLatency.Text = tostring(fpsCounter) .. " FPS\n" .. tostring(pingMs) .. "ms"
-                    valTime.Text = formatElapsed(now - startTick)
-                    fpsCounter = 0
-                    lastFpsUpdate = now
-                end
-            end)
-        )
-
-        local changelogCard, changelogBody = createCard(leftCol, "Changelog", "", options.ChangelogIcon, 250)
-        changelogCard.Name = "HomeChangelog"
-
-        if changelog[1] then
-            local latest = changelog[1]
-            local title = createText(changelogBody, tostring(latest.Title or "Latest"), 13, true, Theme.Text)
-            title.Size = UDim2.new(1, 0, 0, 18)
-
-            if latest.Date then
-                local date = createText(changelogBody, tostring(latest.Date), 11, false, Theme.SubText)
-                date.Position = UDim2.new(0, 0, 0, 20)
-                date.Size = UDim2.new(1, 0, 0, 16)
-            end
-
-            if latest.Description then
-                local desc = createText(changelogBody, tostring(latest.Description), 11, false, Theme.SubText)
-                desc.Position = UDim2.new(0, 0, 0, 40)
-                desc.Size = UDim2.new(1, 0, 1, -40)
-                desc.TextWrapped = true
-                desc.TextYAlignment = Enum.TextYAlignment.Top
-            end
-        else
-            local empty = createText(changelogBody, "No updates yet.", 11, false, Theme.SubText)
-            empty.Size = UDim2.new(1, 0, 1, 0)
-            empty.TextYAlignment = Enum.TextYAlignment.Top
-        end
-    end
-
-    do
-        local accountCard = createCard(rightCol, "Account", "Coming Soon.", options.AccountIcon, 88)
-        accountCard.Name = "HomeAccount"
-
-        local executorName = (identifyexecutor and identifyexecutor())
-            or (getexecutorname and getexecutorname())
-            or "Roblox Studio"
-
-        local execCard, execBody = createCard(rightCol, tostring(executorName), "", options.ExecutorIcon, 88)
-        execCard.Name = "HomeExecutor"
-
-        table.insert(unsupportedExecutors, "Roblox Studio")
-
-        local execText = "Your Executor Seems To Be\nSupported By This Script."
-        if table.find(unsupportedExecutors, executorName) then
-            execText = "Your Executor Is Unsupported\nBy This Script."
-        elseif #supportedExecutors > 0 and not table.find(supportedExecutors, executorName) then
-            execText = "Your Executor Is Unsupported\nBy This Script."
-        end
-        local l = createText(execBody, execText, 11, false, Theme.SubText)
-        l.Size = UDim2.new(1, 0, 1, 0)
-        l.TextWrapped = true
-        l.TextYAlignment = Enum.TextYAlignment.Top
-
-        local friendsCard, friendsBody = createCard(rightCol, "Friends", "", options.FriendsIcon, 250)
-        friendsCard.Name = "HomeFriends"
-
-        local grid = Instance.new("Frame")
-        grid.Name = "HomeFriendsGrid"
-        grid.BackgroundTransparency = 1
-        grid.BorderSizePixel = 0
-        grid.Size = UDim2.new(1, 0, 1, 0)
-        grid.Parent = friendsBody
-
-        local gridLayout = Instance.new("UIGridLayout")
-        gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
-        gridLayout.CellSize = UDim2.new(0.5, -5, 0, 56)
-        gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        gridLayout.Parent = grid
-
-        local function friendTile(titleText)
-            local tile = Instance.new("Frame")
-            tile.Name = "HomeFriendTile"
-            tile.BackgroundColor3 = Theme.Card2
-            tile.BorderSizePixel = 0
-            tile.Parent = grid
-            applyCorner(tile, 10)
-            applyStroke(tile, Theme.StrokeSoft, 0.7)
-
-            local p = Instance.new("UIPadding")
-            p.Name = "HomeFriendPad"
-            p.PaddingTop = UDim.new(0, 8)
-            p.PaddingLeft = UDim.new(0, 10)
-            p.PaddingRight = UDim.new(0, 10)
-            p.PaddingBottom = UDim.new(0, 8)
-            p.Parent = tile
-
-            local title = createText(tile, titleText, 11, true, Theme.Text)
-            title.Size = UDim2.new(1, 0, 0, 16)
-            local value = createText(tile, "0 friends", 11, false, Theme.SubText)
-            value.Position = UDim2.new(0, 0, 0, 18)
-            value.Size = UDim2.new(1, 0, 0, 30)
-            value.TextWrapped = true
-            value.TextYAlignment = Enum.TextYAlignment.Top
-            return value
-        end
-
-        local inServerLabel = friendTile("In Server")
-        local offlineLabel = friendTile("Offline")
-        local onlineLabel = friendTile("Online")
-        local totalLabel = friendTile("Total")
-
-        local friendsCooldown = 0
-        local function checkFriends()
-            if friendsCooldown > 0 then
-                friendsCooldown -= 1
-                return
-            end
-            friendsCooldown = 25
-
-            local lp = Players.LocalPlayer
-            if not (lp and lp.UserId) then
-                return
-            end
-
-            local total = 0
-            local online = 0
-            local inServer = 0
-
-            pcall(function()
-                online = #lp:GetFriendsOnline()
-            end)
-
-            pcall(function()
-                local playersFriends = {}
-                local list = Players:GetFriendsAsync(lp.UserId)
-                while true do
-                    for _, data in list:GetCurrentPage() do
-                        total += 1
-                        table.insert(playersFriends, data)
-                    end
-                    if list.IsFinished then
-                        break
-                    end
-                    list:AdvanceToNextPageAsync()
-                end
-
-                for _, data in ipairs(playersFriends) do
-                    if Players:FindFirstChild(data.Username) then
-                        inServer += 1
-                    end
-                end
-            end)
-
-            local offline = math.max(0, total - online)
-
-            inServerLabel.Text = tostring(inServer) .. " friends"
-            offlineLabel.Text = tostring(offline) .. " friends"
-            onlineLabel.Text = tostring(online) .. " friends"
-            totalLabel.Text = tostring(total) .. " friends"
-        end
-
-        checkFriends()
-        table.insert(
-            connections,
-            RunService.Heartbeat:Connect(function()
-                if destroyed then
-                    return
-                end
-                checkFriends()
-            end)
-        )
-    end
-
-    return homeTab
 end
 
 Buster.BronxUI = Buster
