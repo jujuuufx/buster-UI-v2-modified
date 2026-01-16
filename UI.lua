@@ -2046,8 +2046,7 @@ function Buster:CreateWindow(options)
         })
     end
     
-    -- Added missing CreateHomeTab function
-    function Buster:CreateHomeTab(window, options)
+ function Buster:CreateHomeTab(window, options)
     -- Added nil check to prevent "attempt to index nil with 'CreateTab'" error
     if not window then
         warn("[Buster UI] CreateHomeTab failed: 'window' parameter is nil. Make sure to create a window first using Buster:CreateWindow()")
@@ -2312,6 +2311,8 @@ function Buster:CreateWindow(options)
     table.insert(connections, content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
         applyHomeColumns(window._main.Size.X.Offset)
     end))
+    
+    -- Discord card block
     do
         local discordCard = createCard(leftCol, "Discord", "Tap to join the discord of\nyour script.", options.DiscordIcon, 88)
         local discordInteract = Instance.new("TextButton")
@@ -2510,8 +2511,9 @@ function Buster:CreateWindow(options)
             empty.Size = UDim2.new(1, 0, 1, 0)
             empty.TextYAlignment = Enum.TextYAlignment.Top
         end
-    end
+    end -- end of first do block
 
+    -- Right column block
     do
         local accountCard = createCard(rightCol, "Account", "Coming Soon.", options.AccountIcon, 88)
         accountCard.Name = "HomeAccount"
@@ -2644,11 +2646,7 @@ function Buster:CreateWindow(options)
                 checkFriends()
             end)
         )
-    end
+    end -- end of second do block
 
     return homeTab
-end
-
-Buster.BronxUI = Buster
-
-return Buster
+end -- end of CreateHomeTab function
