@@ -2647,4 +2647,3 @@ function Buster:CreateWindow(options)
     
     return Buster
     
-    end
