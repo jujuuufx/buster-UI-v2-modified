@@ -329,10 +329,10 @@ end
 
 function Buster:CreateWindow(options)
     options = options or {}
-    local titleText = options.Name or "Sev.cc"
-    local subtitleText = options.Subtitle or "The Bronx"
+    local titleText = options.Name or "Valley.gg"
+    local subtitleText = options.Subtitle or ""
     local footerText = options.Footer or subtitleText
-    local brandText = options.BrandText or "S"
+    local brandText = options.BrandText or "V"
     local brandImage = options.BrandImage
     local accentColor = parseAccentColor(options.Accent)
     if accentColor then
