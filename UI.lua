@@ -370,11 +370,20 @@ function Buster:CreateWindow(options)
         return 860, 480
     end
 
+    -- Cleanup existing GUI to prevent duplicates
+    if Buster.Gui then
+        pcall(function() Buster.Gui:Destroy() end)
+        Buster.Gui = nil
+    end
+
     local screen = Instance.new("ScreenGui")
     screen.Name = "Buster"
     screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     screen.ResetOnSpawn = false
     safeParentGui(screen)
+    
+    -- Store reference for cleanup
+    Buster.Gui = screen
 
     local overlay = Instance.new("Frame")
     overlay.Name = "Overlay"
