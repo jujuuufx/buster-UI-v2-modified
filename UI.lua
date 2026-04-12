@@ -490,7 +490,8 @@ function Buster:CreateWindow(options)
     brand.TextColor3 = Theme.Accent
     brand.TextSize = 16
     brand.Font = Enum.Font.GothamBold
-    brand.TextXAlignment = Enum.TextXAlignment.Left
+    brand.TextXAlignment = Enum.TextXAlignment.Center
+    brand.TextYAlignment = Enum.TextYAlignment.Center
     brand.Parent = brandWrap
 
     local brandImg = Instance.new("ImageLabel")
